@@ -120,6 +120,31 @@ export const CommitteesPage: React.FC = () => {
     setSearchQuery('');
   };
 
+  // Dynamic categories based on members in this committee tenure
+  const dynamicCategories = React.useMemo(() => {
+    const rawCategories = Array.from(new Set(members.map(m => m.category || 'Member'))).filter(Boolean);
+    const standardOrder = ['Executive', 'Lead', 'Advisor'];
+    const customCats = rawCategories.filter(c => !standardOrder.includes(c) && c !== 'Member');
+    const sorted = [
+      ...standardOrder.filter(c => rawCategories.includes(c)),
+      ...customCats,
+      ...(rawCategories.includes('Member') ? ['Member'] : [])
+    ];
+    return [
+      { label: 'All Members', value: 'All', count: members.length },
+      ...sorted.map(c => {
+        let label = c;
+        if (c === 'Executive') label = '👑 Executive Council';
+        else if (c === 'Lead') label = '⚡ Technical Leads';
+        else if (c === 'Advisor') label = '🎓 Faculty Advisors';
+        else if (c === 'Member') label = '👤 General Members';
+        else label = `🏷️ ${c}`;
+        const count = members.filter(m => (m.category || 'Member') === c).length;
+        return { label, value: c, count };
+      })
+    ];
+  }, [members]);
+
   // Filtered members list
   const filteredMembers = members.filter(m => {
     const q = searchQuery.toLowerCase();
@@ -132,11 +157,7 @@ export const CommitteesPage: React.FC = () => {
     if (!matchesSearch) return false;
 
     if (selectedCategory === 'All') return true;
-    if (selectedCategory === 'Executive') return m.category === 'Executive';
-    if (selectedCategory === 'Lead') return m.category === 'Lead';
-    if (selectedCategory === 'Advisor') return m.category === 'Advisor';
-    if (selectedCategory === 'Member') return m.category === 'Member';
-    return true;
+    return (m.category || 'Member') === selectedCategory;
   });
 
   return (
@@ -315,13 +336,7 @@ export const CommitteesPage: React.FC = () => {
             {/* Category Filter Pills & Search Bar */}
             <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
               <div className="flex overflow-x-auto no-scrollbar gap-2 pb-1 sm:pb-0">
-                {[
-                  { label: 'All Members', value: 'All', count: counts.total },
-                  { label: '👑 Executive Council', value: 'Executive', count: counts.executive },
-                  { label: '⚡ Technical Leads', value: 'Lead', count: counts.leads },
-                  { label: '🎓 Faculty Advisors', value: 'Advisor', count: counts.advisors },
-                  { label: '👤 General Members', value: 'Member', count: counts.members }
-                ].map(cat => (
+                {dynamicCategories.map(cat => (
                   <button
                     key={cat.value}
                     onClick={() => setSelectedCategory(cat.value)}

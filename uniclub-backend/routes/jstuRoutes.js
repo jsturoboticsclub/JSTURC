@@ -159,58 +159,6 @@ router.get('/members', async (req, res) => {
         };
       });
 
-      // Also append other approved users who are not in committee_members so newly registered members show up
-      try {
-        const otherApprovedUsers = await allQuery(`
-          SELECT u.id as user_id, u.id, u.name, u.email, u.role, u.committee_role, u.department, u.student_id,
-                 u.bio, u.skills, u.profile_photo, u.contact_links, u.project_contributions, u.created_at
-          FROM users u
-          WHERE u.status = 'approved'
-            AND u.id NOT IN (SELECT COALESCE(user_id, 0) FROM committee_members WHERE committee_id = ?)
-            AND LOWER(u.email) NOT IN (SELECT LOWER(COALESCE(email, '')) FROM committee_members WHERE committee_id = ?)
-          ORDER BY u.id ASC
-        `, [targetCommittee.id, targetCommittee.id]);
-
-        const otherMembers = otherApprovedUsers.map(u => {
-          let skills = [];
-          let contact_links = {};
-          let project_contributions = [];
-          try { skills = u.skills ? JSON.parse(u.skills) : []; } catch (e) {}
-          try { contact_links = u.contact_links ? JSON.parse(u.contact_links) : {}; } catch (e) {}
-          try { project_contributions = u.project_contributions ? JSON.parse(u.project_contributions) : []; } catch (e) {}
-
-          return {
-            id: u.id,
-            committee_id: targetCommittee.id,
-            user_id: u.id,
-            name: u.name,
-            email: u.email,
-            department: u.department,
-            student_id: u.student_id,
-            committee_role: u.committee_role || 'Standard Member',
-            category: 'Member',
-            is_override: 0,
-            profile_photo: u.profile_photo,
-            bio: u.bio,
-            skills,
-            contact_links,
-            display_order: 99,
-            role: u.role || 'Member',
-            project_contributions,
-            committee_info: {
-              id: targetCommittee.id,
-              committee_number: targetCommittee.committee_number,
-              title: targetCommittee.title,
-              session_years: targetCommittee.session_years,
-              is_current: targetCommittee.is_current
-            }
-          };
-        });
-
-        members = [...members, ...otherMembers];
-      } catch (appendErr) {
-        console.warn('Could not append extra members:', appendErr.message);
-      }
     }
 
     // Fallback if committee_members table has no entries for target committee
@@ -339,6 +287,12 @@ router.get('/committees/current', async (req, res) => {
       return { ...m, skills, social_links };
     });
 
+    const categoryCounts = {};
+    parsedMembers.forEach(m => {
+      const cat = m.category || 'Member';
+      categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+    });
+
     res.json({
       success: true,
       committee,
@@ -348,8 +302,10 @@ router.get('/committees/current', async (req, res) => {
         executive: parsedMembers.filter(m => m.category === 'Executive').length,
         leads: parsedMembers.filter(m => m.category === 'Lead').length,
         advisors: parsedMembers.filter(m => m.category === 'Advisor').length,
-        members: parsedMembers.filter(m => m.category === 'Member').length
-      }
+        members: parsedMembers.filter(m => m.category === 'Member').length,
+        ...categoryCounts
+      },
+      category_counts: categoryCounts
     });
   } catch (err) {
     console.error('Error fetching current committee:', err);
@@ -414,6 +370,12 @@ router.get('/committees/:id', async (req, res) => {
       return { ...m, skills, social_links };
     });
 
+    const categoryCounts = {};
+    parsedMembers.forEach(m => {
+      const cat = m.category || 'Member';
+      categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+    });
+
     res.json({
       success: true,
       committee,
@@ -423,8 +385,10 @@ router.get('/committees/:id', async (req, res) => {
         executive: parsedMembers.filter(m => m.category === 'Executive').length,
         leads: parsedMembers.filter(m => m.category === 'Lead').length,
         advisors: parsedMembers.filter(m => m.category === 'Advisor').length,
-        members: parsedMembers.filter(m => m.category === 'Member').length
-      }
+        members: parsedMembers.filter(m => m.category === 'Member').length,
+        ...categoryCounts
+      },
+      category_counts: categoryCounts
     });
   } catch (err) {
     console.error('Error fetching committee details:', err);
@@ -1722,6 +1686,7 @@ router.post('/admin/committees/:id/members', authenticate, requireAdmin, async (
       finalCategory = inferMemberCategory(designation);
       manualOverride = 0;
     } else {
+      finalCategory = finalCategory.trim();
       manualOverride = 1;
     }
 
@@ -1769,7 +1734,8 @@ router.put('/admin/committees/members/:memberId', authenticate, requireAdmin, as
     if (category === 'Auto') {
       finalCategory = inferMemberCategory(designation);
       manualOverride = 0;
-    } else if (category && ['Executive', 'Lead', 'Advisor', 'Member'].includes(category)) {
+    } else if (category && typeof category === 'string' && category.trim().length > 0) {
+      finalCategory = category.trim();
       manualOverride = 1;
     }
 

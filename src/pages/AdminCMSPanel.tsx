@@ -125,6 +125,34 @@ export const AdminCMSPanel: React.FC = () => {
   const [isCloneModalOpen, setIsCloneModalOpen] = useState(false);
   const [cloneSourceId, setCloneSourceId] = useState<number | ''>('');
 
+  // Dynamic Custom Categories for Committees
+  const [customCategories, setCustomCategories] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('jstu_custom_committee_categories');
+      return saved ? JSON.parse(saved) : ['Executive', 'Lead', 'Advisor', 'Member'];
+    } catch (e) {
+      return ['Executive', 'Lead', 'Advisor', 'Member'];
+    }
+  });
+  const [isCreateCategoryModalOpen, setIsCreateCategoryModalOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [isCustomCategoryMode, setIsCustomCategoryMode] = useState(false);
+  const [customCategoryInput, setCustomCategoryInput] = useState('');
+
+  const handleCreateNewCategory = (catName: string) => {
+    const trimmed = catName.trim();
+    if (!trimmed) return;
+    if (!customCategories.includes(trimmed)) {
+      const updated = [...customCategories, trimmed];
+      setCustomCategories(updated);
+      try { localStorage.setItem('jstu_custom_committee_categories', JSON.stringify(updated)); } catch (e) {}
+    }
+    setCommitteeCategoryFilter(trimmed);
+    showToast('success', `Category "${trimmed}" created!`);
+    setIsCreateCategoryModalOpen(false);
+    setNewCategoryName('');
+  };
+
   // Superpower State
   const [superConfig, setSuperConfig] = useState<any>({
     branding: {
@@ -295,6 +323,17 @@ export const AdminCMSPanel: React.FC = () => {
       fetchCommitteeDetails(selectedCommitteeId);
     }
   }, [selectedCommitteeId]);
+
+  useEffect(() => {
+    if (committeeMembers && committeeMembers.length > 0) {
+      const found = committeeMembers.map((m: any) => m.category).filter(Boolean);
+      const merged = Array.from(new Set([...customCategories, ...found]));
+      if (merged.length > customCategories.length) {
+        setCustomCategories(merged);
+        try { localStorage.setItem('jstu_custom_committee_categories', JSON.stringify(merged)); } catch (e) {}
+      }
+    }
+  }, [committeeMembers]);
 
 
   const showToast = (type: 'success' | 'error', text: string) => {
@@ -546,15 +585,7 @@ export const AdminCMSPanel: React.FC = () => {
         body: JSON.stringify(editingUser)
       });
       if (res.ok) {
-        // Also save committee category if provided
-        if (editingUser.committee_category) {
-          await fetch(`/api/admin/users/${editingUser.id}/committee-category`, {
-            method: 'PUT',
-            headers: getHeaders(),
-            body: JSON.stringify({ category: editingUser.committee_category })
-          });
-        }
-        showToast('success', 'User profile & category updated!');
+        showToast('success', 'User profile updated successfully!');
         setUsers(users.map(u => u.id === editingUser.id ? editingUser : u));
         setEditingUser(null);
       }
@@ -797,18 +828,25 @@ export const AdminCMSPanel: React.FC = () => {
 
   const handleQuickMemberCategoryChange = async (memberId: number, category: string) => {
     if (!selectedCommitteeId) return;
+    let targetCat = category;
+    if (category === '__CUSTOM__') {
+      const input = prompt('Enter new category name (e.g. Autonomous Flight Wing, Sub-Executive):');
+      if (!input || !input.trim()) return;
+      targetCat = input.trim();
+      handleCreateNewCategory(targetCat);
+    }
     try {
       const res = await fetch(`/api/admin/committees/members/${memberId}`, {
         method: 'PUT',
         headers: getHeaders(),
         body: JSON.stringify({
-          category,
-          is_override: category === 'Auto' ? 0 : 1
+          category: targetCat,
+          is_override: targetCat === 'Auto' ? 0 : 1
         })
       });
       const data = await res.json();
       if (data.success) {
-        showToast('success', `Category set to: ${data.data.category} ${category === 'Auto' ? '(Inferred)' : '(Admin Override)'}`);
+        showToast('success', `Category set to: ${data.data?.category || targetCat} ${targetCat === 'Auto' ? '(Inferred)' : '(Admin Set)'}`);
         fetchCommitteeDetails(selectedCommitteeId);
         fetchAllAdminData();
       } else {
@@ -1231,7 +1269,7 @@ export const AdminCMSPanel: React.FC = () => {
             }`}
           >
             <Landmark className="w-4 h-4" />
-            <span>🏛️ Committees & Tenures ({committees.length})</span>
+            <span>Committees & Tenures ({committees.length})</span>
           </button>
 
           <button
@@ -2284,7 +2322,7 @@ export const AdminCMSPanel: React.FC = () => {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       {/* Filter Pills */}
                       <div className="flex flex-wrap items-center gap-1.5">
-                        {(['All', 'Executive', 'Lead', 'Advisor', 'Member'] as const).map((cat) => {
+                        {['All', ...Array.from(new Set([...customCategories, ...committeeMembers.map(m => m.category).filter(Boolean)]))].map((cat) => {
                           const count = cat === 'All'
                             ? committeeMembers.length
                             : committeeMembers.filter(m => m.category === cat).length;
@@ -2302,6 +2340,7 @@ export const AdminCMSPanel: React.FC = () => {
                               {cat === 'Executive' && <Crown className="w-3 h-3 text-amber-300" />}
                               {cat === 'Lead' && <Sparkles className="w-3 h-3 text-cyan-300" />}
                               {cat === 'Advisor' && <GraduationCap className="w-3 h-3 text-indigo-300" />}
+                              {cat !== 'All' && !['Executive', 'Lead', 'Advisor', 'Member'].includes(cat) && <Tag className="w-3 h-3 text-purple-400" />}
                               <span>{cat}</span>
                               <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-black/10 dark:bg-white/10">
                                 {count}
@@ -2309,6 +2348,17 @@ export const AdminCMSPanel: React.FC = () => {
                             </button>
                           );
                         })}
+
+                        {/* Power Create Category Button */}
+                        <button
+                          type="button"
+                          onClick={() => setIsCreateCategoryModalOpen(true)}
+                          className="px-3 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white shadow-xs transition-all flex items-center gap-1.5"
+                          title="Create a new committee category"
+                        >
+                          <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                          <span>+ Create Category</span>
+                        </button>
                       </div>
 
                       {/* Search */}
@@ -2374,7 +2424,9 @@ export const AdminCMSPanel: React.FC = () => {
                                       ? 'bg-cyan-50 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300 border-cyan-300 dark:border-cyan-500/30'
                                       : m.category === 'Advisor'
                                       ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-500/30'
-                                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                                      : m.category === 'Member'
+                                      ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                                      : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-500/30'
                                   }`}>
                                     {m.category}
                                   </span>
@@ -2389,10 +2441,15 @@ export const AdminCMSPanel: React.FC = () => {
                                       className="mt-1 px-2.5 py-1 rounded-lg text-xs font-bold border focus:outline-none bg-white dark:bg-slate-800 text-slate-900 dark:text-white border-slate-300 dark:border-slate-700"
                                     >
                                       <option value="Auto">⚙️ Auto ({m.category})</option>
-                                      <option value="Executive">👑 Executive</option>
-                                      <option value="Lead">⚡ Lead</option>
-                                      <option value="Advisor">🎓 Advisor</option>
-                                      <option value="Member">👤 Member</option>
+                                      {customCategories.map(cat => (
+                                        <option key={cat} value={cat}>
+                                          {cat === 'Executive' ? '👑 Executive' :
+                                           cat === 'Lead' ? '⚡ Lead' :
+                                           cat === 'Advisor' ? '🎓 Advisor' :
+                                           cat === 'Member' ? '👤 Member' : `🏷️ ${cat}`}
+                                        </option>
+                                      ))}
+                                      <option value="__CUSTOM__">➕ + Custom Category...</option>
                                     </select>
                                   </div>
 
@@ -2451,21 +2508,18 @@ export const AdminCMSPanel: React.FC = () => {
                                       <select
                                         value={m.is_override ? m.category : 'Auto'}
                                         onChange={(e) => handleQuickMemberCategoryChange(m.id, e.target.value)}
-                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold border focus:outline-none transition-all ${
-                                          m.category === 'Executive'
-                                            ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30'
-                                            : m.category === 'Lead'
-                                            ? 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-500/30'
-                                            : m.category === 'Advisor'
-                                            ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/30'
-                                            : 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/30'
-                                        }`}
+                                        className="px-2.5 py-1 rounded-lg text-xs font-bold border focus:outline-none transition-all bg-white dark:bg-slate-800 text-slate-900 dark:text-white border-slate-300 dark:border-slate-700"
                                       >
                                         <option value="Auto">⚙️ Auto ({m.category})</option>
-                                        <option value="Executive">👑 Executive</option>
-                                        <option value="Lead">⚡ Lead</option>
-                                        <option value="Advisor">🎓 Advisor</option>
-                                        <option value="Member">👤 Member</option>
+                                        {customCategories.map(cat => (
+                                          <option key={cat} value={cat}>
+                                            {cat === 'Executive' ? '👑 Executive' :
+                                             cat === 'Lead' ? '⚡ Lead' :
+                                             cat === 'Advisor' ? '🎓 Advisor' :
+                                             cat === 'Member' ? '👤 Member' : `🏷️ ${cat}`}
+                                          </option>
+                                        ))}
+                                        <option value="__CUSTOM__">➕ + Custom Category...</option>
                                       </select>
                                     </td>
 
@@ -2921,39 +2975,16 @@ export const AdminCMSPanel: React.FC = () => {
                       </div>
 
                       <div>
-                        <span className="text-[10px] font-bold text-slate-400 block uppercase">Position</span>
+                        <span className="text-[10px] font-bold text-slate-400 block uppercase">Department</span>
                         <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 block truncate mt-1">
-                          {u.committee_role || 'General Member'}
+                          {u.department || 'JSTU'}
                         </span>
                       </div>
                     </div>
 
-                    <div className="pt-2 border-t border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between gap-2">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase">Category</span>
-                      <select
-                        value={u.committee_category || 'Auto'}
-                        onChange={(e) => handleQuickUserCategoryChange(u.id, e.target.value)}
-                        className={`px-2 py-1 rounded-lg text-xs font-bold border focus:outline-none ${
-                          u.committee_category === 'Executive'
-                            ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30'
-                            : u.committee_category === 'Lead'
-                            ? 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-500/30'
-                            : u.committee_category === 'Advisor'
-                            ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/30'
-                            : 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/30'
-                        }`}
-                      >
-                        <option value="Auto">⚙️ Auto (Smart)</option>
-                        <option value="Executive">👑 Executive</option>
-                        <option value="Lead">⚡ Lead</option>
-                        <option value="Advisor">🎓 Advisor</option>
-                        <option value="Member">👤 Member</option>
-                      </select>
-                    </div>
-
                     <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-200/80 dark:border-slate-800/80">
-                      <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                        {u.department}
+                      <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400 truncate">
+                        ID: {u.student_id || '—'}
                       </span>
 
                       <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -3005,9 +3036,8 @@ export const AdminCMSPanel: React.FC = () => {
                       <th className="py-3 px-4">Member</th>
                       <th className="py-3 px-4">Role</th>
                       <th className="py-3 px-4">Status</th>
-                      <th className="py-3 px-4">Committee Position</th>
-                      <th className="py-3 px-4">Committee Category</th>
                       <th className="py-3 px-4">Department</th>
+                      <th className="py-3 px-4">Student ID</th>
                       <th className="py-3 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
@@ -3053,34 +3083,12 @@ export const AdminCMSPanel: React.FC = () => {
                           </span>
                         </td>
 
-                        <td className="py-3.5 px-4 text-slate-800 dark:text-slate-200">
-                          {u.committee_role || 'General Member'}
+                        <td className="py-3.5 px-4 text-slate-700 dark:text-slate-300">
+                          {u.department || '—'}
                         </td>
 
-                        <td className="py-3.5 px-4">
-                          <select
-                            value={u.committee_category || 'Auto'}
-                            onChange={(e) => handleQuickUserCategoryChange(u.id, e.target.value)}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-bold border focus:outline-none transition-all ${
-                              u.committee_category === 'Executive'
-                                ? 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30'
-                                : u.committee_category === 'Lead'
-                                ? 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-500/30'
-                                : u.committee_category === 'Advisor'
-                                ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/30'
-                                : 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/30'
-                            }`}
-                          >
-                            <option value="Auto">⚙️ Auto (Smart)</option>
-                            <option value="Executive">👑 Executive</option>
-                            <option value="Lead">⚡ Lead</option>
-                            <option value="Advisor">🎓 Advisor</option>
-                            <option value="Member">👤 Member</option>
-                          </select>
-                        </td>
-
-                        <td className="py-3.5 px-4 text-slate-500 dark:text-slate-400">
-                          {u.department}
+                        <td className="py-3.5 px-4 font-mono text-[11px] text-slate-500 dark:text-slate-400">
+                          {u.student_id || '—'}
                         </td>
 
 
@@ -3529,30 +3537,6 @@ export const AdminCMSPanel: React.FC = () => {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Committee Role</label>
-                  <input
-                    type="text"
-                    value={editingUser.committee_role || ''}
-                    onChange={e => setEditingUser({ ...editingUser, committee_role: e.target.value })}
-                    className="w-full px-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Committee Category (Override)</label>
-                  <select
-                    value={editingUser.committee_category || 'Auto'}
-                    onChange={e => setEditingUser({ ...editingUser, committee_category: e.target.value })}
-                    className="w-full px-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-none focus:border-indigo-500 font-bold"
-                  >
-                    <option value="Auto">⚙️ Auto (Smart Detect)</option>
-                    <option value="Executive">👑 Executive (ExCom)</option>
-                    <option value="Lead">⚡ Lead</option>
-                    <option value="Advisor">🎓 Advisor</option>
-                    <option value="Member">👤 General Member</option>
-                  </select>
-                </div>
 
 
                 <div>
@@ -4254,17 +4238,59 @@ export const AdminCMSPanel: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Category (Classification)</label>
-                    <select
-                      value={newCommitteeMember.category}
-                      onChange={e => setNewCommitteeMember({ ...newCommitteeMember, category: e.target.value })}
-                      className="w-full px-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:border-indigo-500"
-                    >
-                      <option value="Auto">⚙️ Auto (Smart Detect from Role)</option>
-                      <option value="Executive">👑 Executive (ExCom)</option>
-                      <option value="Lead">⚡ Lead</option>
-                      <option value="Advisor">🎓 Advisor</option>
-                      <option value="Member">👤 General Member</option>
-                    </select>
+                    <div className="space-y-1.5">
+                      <select
+                        value={isCustomCategoryMode ? '__CUSTOM__' : newCommitteeMember.category}
+                        onChange={e => {
+                          if (e.target.value === '__CUSTOM__') {
+                            setIsCustomCategoryMode(true);
+                          } else {
+                            setIsCustomCategoryMode(false);
+                            setNewCommitteeMember({ ...newCommitteeMember, category: e.target.value });
+                          }
+                        }}
+                        className="w-full px-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:border-indigo-500"
+                      >
+                        <option value="Auto">⚙️ Auto (Smart Detect from Role)</option>
+                        {customCategories.map(cat => (
+                          <option key={cat} value={cat}>
+                            {cat === 'Executive' ? '👑 Executive (ExCom)' :
+                             cat === 'Lead' ? '⚡ Lead' :
+                             cat === 'Advisor' ? '🎓 Advisor' :
+                             cat === 'Member' ? '👤 General Member' : `🏷️ ${cat}`}
+                          </option>
+                        ))}
+                        <option value="__CUSTOM__">➕ Enter Custom Category...</option>
+                      </select>
+
+                      {isCustomCategoryMode && (
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="e.g. Autonomous Flight Wing, Sub-Executive..."
+                            value={customCategoryInput}
+                            onChange={e => {
+                              setCustomCategoryInput(e.target.value);
+                              setNewCommitteeMember({ ...newCommitteeMember, category: e.target.value });
+                            }}
+                            className="flex-1 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-300 dark:border-indigo-700 text-slate-900 dark:text-white text-xs font-bold focus:outline-none"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (customCategoryInput.trim()) {
+                                handleCreateNewCategory(customCategoryInput);
+                              }
+                              setIsCustomCategoryMode(false);
+                            }}
+                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold"
+                          >
+                            Set
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -4467,17 +4493,59 @@ export const AdminCMSPanel: React.FC = () => {
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Category (Admin Override)</label>
-                    <select
-                      value={editingCommitteeMember.category}
-                      onChange={e => setEditingCommitteeMember({ ...editingCommitteeMember, category: e.target.value })}
-                      className="w-full px-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:border-indigo-500"
-                    >
-                      <option value="Auto">⚙️ Auto (Smart Detect)</option>
-                      <option value="Executive">👑 Executive (ExCom)</option>
-                      <option value="Lead">⚡ Lead</option>
-                      <option value="Advisor">🎓 Advisor</option>
-                      <option value="Member">👤 General Member</option>
-                    </select>
+                    <div className="space-y-1.5">
+                      <select
+                        value={isCustomCategoryMode ? '__CUSTOM__' : editingCommitteeMember.category}
+                        onChange={e => {
+                          if (e.target.value === '__CUSTOM__') {
+                            setIsCustomCategoryMode(true);
+                          } else {
+                            setIsCustomCategoryMode(false);
+                            setEditingCommitteeMember({ ...editingCommitteeMember, category: e.target.value });
+                          }
+                        }}
+                        className="w-full px-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:border-indigo-500"
+                      >
+                        <option value="Auto">⚙️ Auto (Smart Detect)</option>
+                        {customCategories.map(cat => (
+                          <option key={cat} value={cat}>
+                            {cat === 'Executive' ? '👑 Executive (ExCom)' :
+                             cat === 'Lead' ? '⚡ Lead' :
+                             cat === 'Advisor' ? '🎓 Advisor' :
+                             cat === 'Member' ? '👤 General Member' : `🏷️ ${cat}`}
+                          </option>
+                        ))}
+                        <option value="__CUSTOM__">➕ Enter Custom Category...</option>
+                      </select>
+
+                      {isCustomCategoryMode && (
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="e.g. Autonomous Flight Wing..."
+                            value={customCategoryInput}
+                            onChange={e => {
+                              setCustomCategoryInput(e.target.value);
+                              setEditingCommitteeMember({ ...editingCommitteeMember, category: e.target.value });
+                            }}
+                            className="flex-1 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-300 dark:border-indigo-700 text-slate-900 dark:text-white text-xs font-bold focus:outline-none"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (customCategoryInput.trim()) {
+                                handleCreateNewCategory(customCategoryInput);
+                              }
+                              setIsCustomCategoryMode(false);
+                            }}
+                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold"
+                          >
+                            Set
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -4659,6 +4727,106 @@ export const AdminCMSPanel: React.FC = () => {
                     Clone Members Now
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 5b. Dedicated Create Custom Category Modal */}
+        {isCreateCategoryModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-[#0D1424] border border-slate-200 dark:border-slate-700 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400">
+                    <Tag className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">Create Committee Category</h3>
+                    <p className="text-xs text-slate-500">Define a new category or wing for committee members</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsCreateCategoryModalOpen(false);
+                    setNewCategoryName('');
+                  }}
+                  className="p-1 rounded text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Category Name *
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Autonomous Flight Wing, Sub-Executive..."
+                  value={newCategoryName}
+                  onChange={e => setNewCategoryName(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && newCategoryName.trim()) {
+                      e.preventDefault();
+                      handleCreateNewCategory(newCategoryName);
+                    }
+                  }}
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:border-indigo-500"
+                  autoFocus
+                />
+              </div>
+
+              {/* Suggestions */}
+              <div>
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-2">
+                  Popular Suggestions
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    'Sub-Executive',
+                    'Autonomous Drone Wing',
+                    'Embedded Systems & IoT',
+                    'Software & AI Division',
+                    'Robo-Soccer Team',
+                    'Media & Public Relations',
+                    'Advisory Council'
+                  ].map(sug => (
+                    <button
+                      key={sug}
+                      type="button"
+                      onClick={() => setNewCategoryName(sug)}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
+                    >
+                      + {sug}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreateCategoryModalOpen(false);
+                    setNewCategoryName('');
+                  }}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (newCategoryName.trim()) {
+                      handleCreateNewCategory(newCategoryName);
+                    }
+                  }}
+                  disabled={!newCategoryName.trim()}
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold shadow-xs transition-all"
+                >
+                  Create Category
+                </button>
               </div>
             </div>
           </div>
