@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "npm rebuild sqlite3 || true",
+    "build": "npm rebuild sqlite3 --build-from-source || true",
     "start": "node index.js",
     "dev": "nodemon index.js",
     "dev:admin": "nodemon server-with-payload.js",
@@ -45,7 +45,7 @@
     "node-readability": "^3.0.0",
     "payload": "^2.30.3",
     "sharp": "^0.34.4",
-    "sqlite3": "^6.0.1"
+    "sqlite3": "5.1.7"
   },
   "devDependencies": {
     "@faker-js/faker": "^9.8.0",
