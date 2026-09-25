@@ -197,6 +197,7 @@ async function initDatabase() {
 
     await seedInitialData();
     await ensureMasterAdmin();
+    await ensureRegisteredMembers();
   });
 }
 
@@ -763,6 +764,119 @@ async function ensureMasterAdmin() {
     console.log('🧹 Purged legacy demo accounts (admin@jstu.edu, member@jstu.edu)');
   } catch (err) {
     console.error('❌ Error ensuring master admin:', err);
+  }
+}
+
+// Ensure active registered members and Committee #2 are always preserved across reboots & deployments
+async function ensureRegisteredMembers() {
+  try {
+    // 1. Ensure Committee #2 exists and is marked current
+    let c2 = await getQuery('SELECT * FROM committees WHERE committee_number = 2');
+    if (!c2) {
+      const res = await runQuery(
+        `INSERT INTO committees (committee_number, title, session_years, is_current, theme_motto, description)
+         VALUES (2, '2nd Executive Committee', '2026–2027', 1, 'Swarm Intelligence & Aerial Autonomy Scale', 'The incoming executive tenure advancing swarm drone platforms, multi-agent SLAM algorithms, and hosting the regional university robotics symposium.')`
+      );
+      c2 = { id: res.id };
+    }
+    await runQuery('UPDATE committees SET is_current = 1 WHERE committee_number = 2');
+    await runQuery('UPDATE committees SET is_current = 0 WHERE committee_number != 2');
+
+    const defaultPasswordHash = await bcrypt.hash('@@2017JSTURC2017@@', 10);
+
+    const membersToPreserve = [
+      {
+        name: 'M. Miyad Islam Nion',
+        email: 'miyadislam316@gmail.com',
+        role: 'Admin',
+        status: 'approved',
+        committee_role: 'Director',
+        department: 'Robotics & Engineering',
+        student_id: 'JSTU-EEE-20111221',
+        bio: `I am an Electrical and Electronic Engineering (EEE) student at JSTU, currently serving as the Director of the JSTU Robotics Club and IEEE Vice Chair. My technical passion lies at the intersection of embedded systems, Internet of Things (IoT), and artificial intelligence.\n\nKey Contributions:\n\nHardware & IoT Development: Designed and programmed multi-sensor embedded systems using ESP32 and Arduino microcontrollers, integrating environmental sensors (PIR, flame, gas, water-level) with relays and alarms for real-time monitoring and automation.\n\nAI & Power Systems Research: Developed and modeled power electronics and microgrid systems using MATLAB Simscape. Currently researching smart grid cyber-attack detection utilizing explainable AI and Graph Neural Networks (GCN/GAT).\n\nProject Innovation: Designed the "Jamalpur GreenLoop" off-grid hybrid microgrid concept and continuously work to bridge software solutions (Python, Django) with hardware implementations.\n\nClub Leadership: As Club Director, I help lead hardware innovation on campus and spearheaded the deployment of the official JSTURC web platform to showcase our members' work.`,
+        skills: JSON.stringify([
+          'Python', 'Machine Learning (GNNs)', 'ESP32', 'Arduino Uno',
+          'Hardware Integration', 'IoT Systems', 'Firmware Development',
+          'Circuit Design', 'MATLAB & Simulink', 'Wokwi Simulation', 'Embedded Systems'
+        ]),
+        profile_photo: 'https://lh3.googleusercontent.com/a/ACg8ocJWUFxpXB2JMP6REaai9qYrJflsSQGeeKg3woIepgb89A5H1bdI=s96-c',
+        contact_links: JSON.stringify({
+          email: 'miyadislam316@gmail.com',
+          github: 'https://github.com/miyad-islam',
+          linkedin: 'https://www.linkedin.com/in/miyad-islam'
+        }),
+        designation: 'Director',
+        category: 'Executive',
+        display_order: 1
+      },
+      {
+        name: 'Abdullah Al Minhaz',
+        email: 'abdullahalminhaz14@gmail.com',
+        role: 'Admin',
+        status: 'approved',
+        committee_role: 'President',
+        department: 'Robotics & Engineering',
+        student_id: '',
+        bio: 'President of the JSTU Robotics Club for the 2026–2027 tenure. Leading student research initiatives, inter-university competitive robotics tournaments, and multi-agent autonomous lab deployments.',
+        skills: JSON.stringify(['Robotics Enthusiast', 'Strategic Leadership', 'Project Architecture', 'Competitive Robotics']),
+        profile_photo: 'https://lh3.googleusercontent.com/a/ACg8ocKKWfqbrpYTgzKTXN8aRY4rKG1V-6l5kvKisw7RMR_GODTS-7n2=s96-c',
+        contact_links: JSON.stringify({ email: 'abdullahalminhaz14@gmail.com' }),
+        designation: 'President',
+        category: 'Executive',
+        display_order: 2
+      },
+      {
+        name: 'Md.Umar Faruk',
+        email: 'umarfarukhridoy28@gmail.com',
+        role: 'Member',
+        status: 'approved',
+        committee_role: 'Secretary',
+        department: 'Electrical & Electronic Engineering',
+        student_id: 'JSTU -EEE-03',
+        bio: `Robotics Enthusiast | Automation & AI\nExploring Robotics, Embedded Systems & Intelligent Machines\nTurning Ideas into Innovative Solutions\nPassionate about Technology, Research & Future Innovation.`,
+        skills: JSON.stringify([
+          'Arduino', 'MATLAB', 'AutoCAD', 'C', 'Python', 'Robotics',
+          'Automation', 'Embedded Systems', 'Artificial Intelligence',
+          'Machine Learning', 'IoT', 'Electrical Circuit Design etc.'
+        ]),
+        profile_photo: 'https://api.dicebear.com/7.x/bottts/svg?seed=Md.Umar%20Faruk',
+        contact_links: JSON.stringify({ email: 'umarfarukhridoy28@gmail.com' }),
+        designation: 'Secretary',
+        category: 'Executive',
+        display_order: 3
+      }
+    ];
+
+    for (const m of membersToPreserve) {
+      let user = await getQuery('SELECT id FROM users WHERE LOWER(email) = LOWER(?)', [m.email]);
+      if (!user) {
+        const res = await runQuery(
+          `INSERT INTO users (name, email, password_hash, role, status, committee_role, department, student_id, bio, skills, profile_photo, contact_links, project_contributions)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]')`,
+          [m.name, m.email, defaultPasswordHash, m.role, m.status, m.committee_role, m.department, m.student_id, m.bio, m.skills, m.profile_photo, m.contact_links]
+        );
+        user = { id: res.id };
+      }
+
+      const cm = await getQuery('SELECT id FROM committee_members WHERE committee_id = ? AND (LOWER(email) = LOWER(?) OR LOWER(name) = LOWER(?))', [c2.id, m.email, m.name]);
+      if (!cm) {
+        await runQuery(
+          `INSERT INTO committee_members (committee_id, user_id, name, email, department, student_id, designation, category, is_override, profile_photo, bio, skills, display_order)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
+          [c2.id, user.id, m.name, m.email, m.department, m.student_id, m.designation, m.category, m.profile_photo, m.bio, m.skills, m.display_order]
+        );
+      } else {
+        await runQuery(
+          `UPDATE committee_members
+           SET user_id = COALESCE(user_id, ?)
+           WHERE id = ?`,
+          [user.id, cm.id]
+        );
+      }
+    }
+    console.log('✅ Verified & preserved all active registered members and Committee #2');
+  } catch (err) {
+    console.error('❌ Error preserving registered members:', err);
   }
 }
 
