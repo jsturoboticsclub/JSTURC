@@ -110,39 +110,15 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
       console.log('Token exists:', !!token);
       console.log('Saved user exists:', !!savedAuthUser);
       
-      // TEMPORARY: Allow access without authentication for debugging
-      if (!token || !savedAuthUser) {
-        console.log('❌ Missing token or user data - but allowing access for debugging');
-        // Set a temporary user for debugging using real enrolled user data
-        const debugUser = {
-          email: 'ashwin.thomas@utdallas.edu',
-          name: 'Ashwin Thomas',
-          uniqueId: 'UTDAIC1'
-        };
-        
-        // Use the portfolio demo token that backend recognizes (see auth.js middleware)
-        const debugToken = 'portfolio-demo-token';
-        localStorage.removeItem('token'); // Clear any expired token first
-        localStorage.setItem('token', debugToken);
-        localStorage.setItem('authUser', JSON.stringify(debugUser));
-        
-        setAuthUser(debugUser);
-        setIsAuthenticated(true);
-        setUser({
-          ...defaultUser,
-          id: '683b6a7623a3da40933f7e24',  // Actual user ID from database for Ashwin Thomas
-          name: debugUser.name,
-          email: debugUser.email,
-          memberId: debugUser.uniqueId,
-          major: 'Computer Engineering',
-          year: 'Graduate Student'
-        });
-        console.log('🔧 Debug user set with name:', debugUser.name);
-        console.log('🔧 DEBUG USER CONTEXT - User ID set to:', '683b6a7623a3da40933f7e24');
-        
-        // Fetch complete user profile including avatar from backend for debug user
-        await fetchUserProfile(debugToken);
-        
+      // If no token or if legacy demo token is present, ensure user is unauthenticated
+      if (!token || token === 'portfolio-demo-token' || !savedAuthUser) {
+        if (token === 'portfolio-demo-token') {
+          localStorage.removeItem('token');
+          localStorage.removeItem('authUser');
+        }
+        setIsAuthenticated(false);
+        setAuthUser(null);
+        setUser({ ...defaultUser });
         setIsLoading(false);
         return;
       }

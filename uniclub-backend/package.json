@@ -27,12 +27,14 @@
     "@payloadcms/richtext-slate": "^1.5.2",
     "axios": "^1.9.0",
     "bcryptjs": "^3.0.2",
+    "compression": "^1.8.2",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "express-rate-limit": "^7.5.0",
     "graphql": "^16.11.0",
     "graphql-type-json": "^0.3.2",
+    "helmet": "^8.3.0",
     "jsdom": "^26.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.15.1",
@@ -41,7 +43,8 @@
     "node-fetch": "^3.3.2",
     "node-readability": "^3.0.0",
     "payload": "^2.30.3",
-    "sharp": "^0.34.4"
+    "sharp": "^0.34.4",
+    "sqlite3": "^6.0.1"
   },
   "devDependencies": {
     "@faker-js/faker": "^9.8.0",

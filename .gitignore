@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 *.local
+*.db-shm
+*.db-wal
 
 # Environment variables
 .env

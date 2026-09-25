@@ -273,7 +273,7 @@ router.put('/profile', authenticateToken, async (req, res) => {
 });
 
 // DELETE /api/users/cleanup-avatars - Remove all broken avatar data (ADMIN ONLY)
-router.delete('/cleanup-avatars', async (req, res) => {
+router.delete('/cleanup-avatars', authenticateToken, async (req, res) => {
   try {
     console.log('🧹 Starting complete avatar cleanup...');
     

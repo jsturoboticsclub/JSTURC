@@ -7,26 +7,15 @@
 
 export const PORTFOLIO_DEMO_TOKEN = 'portfolio-demo-token';
 
-export const DEMO_USER = {
-  email: 'ashwin.thomas@utdallas.edu',
-  name: 'Ashwin Thomas',
-  uniqueId: 'UTDAIC1',
-};
+export const DEMO_USER = null;
 
 /**
- * Initialize portfolio demo mode
- * Sets up automatic authentication for visitors
+ * Initialize portfolio demo mode - Decommissioned for security
  */
 export const initPortfolioDemo = () => {
-  // Check if we're in production and no token exists
-  const hasToken = localStorage.getItem('token') || 
-                   sessionStorage.getItem('authToken') || 
-                   localStorage.getItem('authToken');
-  
-  if (!hasToken) {
-    // Set demo token for portfolio visitors
-    localStorage.setItem('token', PORTFOLIO_DEMO_TOKEN);
-    console.log('🎨 Portfolio demo mode initialized');
+  // Purge any legacy demo token to protect against unauthorized access
+  if (localStorage.getItem('token') === PORTFOLIO_DEMO_TOKEN) {
+    localStorage.removeItem('token');
   }
 };
 
@@ -34,10 +23,6 @@ export const initPortfolioDemo = () => {
  * Check if current user is in demo mode
  */
 export const isPortfolioDemo = (): boolean => {
-  const token = localStorage.getItem('token') || 
-                sessionStorage.getItem('authToken') || 
-                localStorage.getItem('authToken');
-  
-  return token === PORTFOLIO_DEMO_TOKEN;
+  return false;
 };
 

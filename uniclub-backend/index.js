@@ -1,6 +1,9 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const compression = require('compression');
+const rateLimit = require('express-rate-limit');
 const mongoose = require('mongoose');
 const User = require('./models/User');
 const EnrolledUser = require('./models/EnrolledUser');
@@ -10,6 +13,61 @@ const path = require('path');
 const authenticateToken = require('./middleware/auth');
 
 const app = express();
+
+// 1. HTTP Security Headers (Protects against XSS, clickjacking, MIME sniffing, hides X-Powered-By)
+app.use(helmet({
+  contentSecurityPolicy: false, // Allows CDN images (unsplash, dicebear) and fonts
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+
+// 2. High-Speed Gzip/Deflate Response Compression (Reduces payload size by ~75% for instant page loads)
+app.use(compression({
+  threshold: 1024 // Compress any response > 1KB
+}));
+
+// 3. API Abuse Protection & Rate Limiting
+const globalApiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 300, // Limit each IP to 300 requests per 15 minutes
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: 'Too many requests from this IP. Please slow down and try again later.'
+  }
+});
+
+const strictAuthLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 12, // Max 12 login / password attempts per 15 min to prevent brute force & credential stuffing
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: 'Too many authentication attempts from this IP. Please try again after 15 minutes.'
+  }
+});
+
+const submissionLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: 'Too many submissions. Please wait a few minutes before submitting again.'
+  }
+});
+
+// Apply rate limiters
+app.use('/api', globalApiLimiter);
+app.use('/api/auth/login', strictAuthLimiter);
+app.use('/api/auth/register', strictAuthLimiter);
+app.use('/api/auth/forgot-password', strictAuthLimiter);
+app.use('/api/auth/reset-password', strictAuthLimiter);
+app.use('/api/join-apply', submissionLimiter);
+app.use('/api/member/propose-project', submissionLimiter);
 
 // IMPORTANT: Set body parser limits for Base64 images
 app.use(express.json({ limit: '10mb' }));
@@ -56,40 +114,39 @@ app.use(cors({
   optionsSuccessStatus: 204
 }));
 
-// Connect to MongoDB using environment variable
+// JSTU Robotics Club Relational Database & Routes
+const jstuRoutes = require('./routes/jstuRoutes');
+app.use('/api', jstuRoutes);
+
+// Connect to MongoDB if configured, otherwise rely on SQLite
 const mongoUri = process.env.MONGODB_URI;
 if (!mongoUri) {
-  console.error('❌ MONGODB_URI environment variable is not set!');
-  process.exit(1);
+  console.log('ℹ️ MONGODB_URI not set - using SQLite relational database for JSTU Robotics Club');
+} else {
+  console.log('🔗 Connecting to MongoDB...');
+  const mongoOptions = {
+    maxPoolSize: 10,
+    minPoolSize: 2,
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
+    connectTimeoutMS: 10000
+  };
+
+  mongoose.connect(mongoUri, mongoOptions)
+    .then(async () => {
+      console.log('✅ Connected to MongoDB');
+      console.log('📂 Database name:', mongoose.connection.db?.databaseName || 'connected');
+      try {
+        const testCount = await EnrolledUser.countDocuments();
+        console.log(`📊 EnrolledUser collection: ${testCount} users`);
+      } catch (error) {
+        console.error('❌ Error accessing EnrolledUser:', error);
+      }
+    })
+    .catch((err) => {
+      console.warn('⚠️ MongoDB connection failed, using SQLite relational database:', err.message);
+    });
 }
-console.log('🔗 Connecting to MongoDB...');
-
-// Configure MongoDB connection with performance optimizations
-const mongoOptions = {
-  maxPoolSize: 10, // Connection pool size
-  minPoolSize: 2,
-  serverSelectionTimeoutMS: 5000, // Faster timeout
-  socketTimeoutMS: 45000,
-  connectTimeoutMS: 10000
-};
-
-mongoose.connect(mongoUri, mongoOptions)
-  .then(async () => {
-    console.log('✅ Connected to MongoDB');
-    console.log('📂 Database name:', mongoose.connection.db?.databaseName || 'connected');
-    
-    // Skip heavy queries on startup - just test connectivity
-    try {
-      const testCount = await EnrolledUser.countDocuments();
-      console.log(`📊 EnrolledUser collection: ${testCount} users`);
-    } catch (error) {
-      console.error('❌ Error accessing EnrolledUser:', error);
-    }
-  })
-  .catch((err) => {
-    console.error('❌ Failed to connect to MongoDB:', err);
-    process.exit(1);
-  });
 
 const authRouter = express.Router();
 
@@ -344,8 +401,8 @@ const searchRouter = require('./routes/searchRouter');
 app.use('/api/search', searchRouter);
 console.log('✅ Search router mounted at /api/search');
 
-// Debug endpoint to see what's actually in the database
-app.get('/api/debug/enrolled', async (req, res) => {
+// Debug endpoint to see enrolled users (Admin / Auth required)
+app.get('/api/debug/enrolled', authenticateToken, async (req, res) => {
   try {
     const allUsers = await EnrolledUser.find({});
     console.log('=== DEBUG: All enrolled users ===');
@@ -432,5 +489,33 @@ app.get('/api/cron/news-curation', async (req, res) => {
   }
 });
 
+// 4. API 404 Handler for undefined API routes
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({
+      success: false,
+      error: 'API endpoint not found',
+      path: req.originalUrl,
+      method: req.method,
+      timestamp: new Date().toISOString()
+    });
+  }
+  next();
+});
+
+// 5. Global Safe Error Handler (Sanitizes errors so database internals are never leaked)
+app.use((err, req, res, next) => {
+  console.error('🔥 [SERVER ERROR]:', err);
+  const status = err.status || err.statusCode || 500;
+  const isProd = process.env.NODE_ENV === 'production';
+  res.status(status).json({
+    success: false,
+    error: isProd 
+      ? 'An unexpected security/server error occurred. Please contact the club administrator.' 
+      : (err.message || 'Internal Server Error'),
+    referenceId: Date.now().toString(36)
+  });
+});
+
 // Export for Vercel serverless functions
-module.exports = app; 
+module.exports = app;

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const ContentCurationService = require('../services/ContentCurationService');
+const authenticateToken = require('../middleware/auth');
 
 // GET /api/curation/homepage - Get curated content for homepage (top 3 per category)
 router.get('/homepage', async (req, res) => {
@@ -55,7 +56,7 @@ router.get('/featured', async (req, res) => {
 });
 
 // POST /api/curation/run - Manually trigger content curation
-router.post('/run', async (req, res) => {
+router.post('/run', authenticateToken, async (req, res) => {
   try {
     console.log('🚀 API: Manual content curation triggered...');
     const rankedContent = await ContentCurationService.curateFeaturedContent();
@@ -78,7 +79,7 @@ router.post('/run', async (req, res) => {
 });
 
 // POST /api/curation/test - Test the entire curation system
-router.post('/test', async (req, res) => {
+router.post('/test', authenticateToken, async (req, res) => {
   try {
     console.log('🧪 API: Testing curation system...');
     const testResults = await ContentCurationService.testCuration();
