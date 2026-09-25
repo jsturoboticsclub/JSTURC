@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "node -e \"console.log('Backend build completed')\"",
+    "build": "npm rebuild sqlite3 || true",
     "start": "node index.js",
     "dev": "nodemon index.js",
     "dev:admin": "nodemon server-with-payload.js",
@@ -50,5 +50,8 @@
   "devDependencies": {
     "@faker-js/faker": "^9.8.0",
     "nodemon": "^3.1.10"
+  },
+  "engines": {
+    "node": "20.x"
   }
 }
