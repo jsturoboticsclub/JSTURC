@@ -99,10 +99,11 @@ app.use(cors({
       'http://localhost:8082', 'http://127.0.0.1:8082', 'http://192.168.1.191:8082'
     ];
     
-    // Allow all Vercel preview and production URLs
-    const isVercelDomain = origin && origin.includes('vercel.app');
+    // Allow local development, all Vercel domains, and optional custom FRONTEND_URL
+    const isVercelDomain = origin && (origin.includes('vercel.app') || origin.includes('render.com'));
+    const isFrontendUrl = process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL;
     
-    if (!origin || allowedOrigins.includes(origin) || isVercelDomain) {
+    if (!origin || allowedOrigins.includes(origin) || isVercelDomain || isFrontendUrl || process.env.NODE_ENV === 'production') {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
