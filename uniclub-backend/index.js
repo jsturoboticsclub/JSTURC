@@ -424,23 +424,12 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Uniclub backend is running!' });
 });
 
-// Only start server in local development (not on Vercel)
-if (process.env.NODE_ENV !== 'production') {
+// Start server on assigned port (Render, Railway, VPS, Local)
+if (process.env.VERCEL !== '1' || process.env.PORT) {
   app.listen(PORT, () => {
-    console.log(`🚀 Backend API running at: http://localhost:${PORT}`);
-    console.log('🚀 Available endpoints:');
-    console.log('   🔐 Authentication: /api/auth/*');
-    console.log('   📰 News: /api/news');
-    console.log('   👥 Users: /api/users/*');
-    console.log('   🎯 Engagement: /api/engagement/*');
-    console.log('   📅 Events: /api/events/*');
-    console.log('   📱 Social: /api/social/*');
-    console.log('   💬 Comments: /api/comments/*');
-    console.log('   🎨 Curation: /api/curation/*');
-    console.log('   📚 Resources: /api/resources/*');
-    console.log('   📜 Past Events: /api/past-events/*');
-    console.log('   🔍 Debug: /api/debug/enrolled');
-    console.log('   ❤️ Health: /api/health');
+    console.log(`🚀 JSTU Robotics Backend API running on port ${PORT}`);
+    console.log(`📡 Health check available at: /api/health`);
+    console.log(`🤖 Club endpoints ready: /api/site-content, /api/members, /api/committees, /api/projects`);
   });
 }
 
