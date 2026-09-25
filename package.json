@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "npm run dev",
+    "serve": "node uniclub-backend/index.js",
+    "start:prod": "node uniclub-backend/index.js",
     "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
     "backend": "cd uniclub-backend && cross-env PORT=5000 npm run dev",
     "frontend": "vite --port 8081",

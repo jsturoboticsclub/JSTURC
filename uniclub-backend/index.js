@@ -10,6 +10,7 @@ const EnrolledUser = require('./models/EnrolledUser');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const path = require('path');
+const fs = require('fs');
 const authenticateToken = require('./middleware/auth');
 
 const app = express();
@@ -502,6 +503,16 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// 4b. Serve static frontend assets from dist for production deployment (Render / VPS)
+const distPath = path.join(__dirname, '../dist');
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+}
 
 // 5. Global Safe Error Handler (Sanitizes errors so database internals are never leaked)
 app.use((err, req, res, next) => {
