@@ -83,14 +83,38 @@ router.get('/members', async (req, res) => {
 
     let members = [];
 
+    // Auto-link any committee_members whose email matches an approved user in users table
+    try {
+      await runQuery(`
+        UPDATE committee_members
+        SET user_id = (SELECT u.id FROM users u WHERE LOWER(u.email) = LOWER(committee_members.email) LIMIT 1)
+        WHERE user_id IS NULL AND email IS NOT NULL AND email != ''
+          AND EXISTS (SELECT 1 FROM users u WHERE LOWER(u.email) = LOWER(committee_members.email))
+      `);
+    } catch (e) {
+      // non-blocking
+    }
+
     if (targetCommittee) {
       const cmRows = await allQuery(`
-        SELECT cm.id, cm.committee_id, cm.user_id, cm.name, cm.email, cm.department, cm.student_id,
-               cm.designation as committee_role, cm.category, cm.is_override, cm.profile_photo,
-               cm.bio, cm.skills, cm.social_links as contact_links, cm.display_order,
-               u.role, u.project_contributions
+        SELECT cm.id, cm.committee_id,
+               COALESCE(cm.user_id, u.id) as user_id,
+               CASE WHEN cm.is_override = 1 THEN cm.name ELSE COALESCE(u.name, cm.name) END as name,
+               COALESCE(u.email, cm.email) as email,
+               CASE WHEN cm.is_override = 1 THEN cm.department ELSE COALESCE(u.department, cm.department) END as department,
+               COALESCE(u.student_id, cm.student_id) as student_id,
+               cm.designation as committee_role,
+               cm.category,
+               cm.is_override,
+               CASE WHEN cm.is_override = 1 THEN cm.profile_photo ELSE COALESCE(NULLIF(u.profile_photo, ''), cm.profile_photo) END as profile_photo,
+               CASE WHEN cm.is_override = 1 THEN cm.bio ELSE COALESCE(NULLIF(u.bio, ''), cm.bio) END as bio,
+               CASE WHEN cm.is_override = 1 THEN cm.skills ELSE COALESCE(NULLIF(u.skills, ''), cm.skills) END as skills,
+               CASE WHEN cm.is_override = 1 THEN cm.social_links ELSE COALESCE(NULLIF(u.contact_links, ''), cm.social_links) END as contact_links,
+               cm.display_order,
+               COALESCE(u.role, CASE WHEN cm.category = 'Executive' OR cm.category = 'Advisor' THEN 'Executive' ELSE 'Member' END) as role,
+               u.project_contributions
         FROM committee_members cm
-        LEFT JOIN users u ON cm.user_id = u.id
+        LEFT JOIN users u ON (cm.user_id = u.id OR (cm.email IS NOT NULL AND cm.email != '' AND LOWER(cm.email) = LOWER(u.email)))
         WHERE cm.committee_id = ?
         ORDER BY 
           CASE 
@@ -128,6 +152,59 @@ router.get('/members', async (req, res) => {
           }
         };
       });
+
+      // Also append other approved users who are not in committee_members so newly registered members show up
+      try {
+        const otherApprovedUsers = await allQuery(`
+          SELECT u.id as user_id, u.id, u.name, u.email, u.role, u.committee_role, u.department, u.student_id,
+                 u.bio, u.skills, u.profile_photo, u.contact_links, u.project_contributions, u.created_at
+          FROM users u
+          WHERE u.status = 'approved'
+            AND u.id NOT IN (SELECT COALESCE(user_id, 0) FROM committee_members WHERE committee_id = ?)
+            AND LOWER(u.email) NOT IN (SELECT LOWER(COALESCE(email, '')) FROM committee_members WHERE committee_id = ?)
+          ORDER BY u.id ASC
+        `, [targetCommittee.id, targetCommittee.id]);
+
+        const otherMembers = otherApprovedUsers.map(u => {
+          let skills = [];
+          let contact_links = {};
+          let project_contributions = [];
+          try { skills = u.skills ? JSON.parse(u.skills) : []; } catch (e) {}
+          try { contact_links = u.contact_links ? JSON.parse(u.contact_links) : {}; } catch (e) {}
+          try { project_contributions = u.project_contributions ? JSON.parse(u.project_contributions) : []; } catch (e) {}
+
+          return {
+            id: u.id,
+            committee_id: targetCommittee.id,
+            user_id: u.id,
+            name: u.name,
+            email: u.email,
+            department: u.department,
+            student_id: u.student_id,
+            committee_role: u.committee_role || 'Standard Member',
+            category: 'Member',
+            is_override: 0,
+            profile_photo: u.profile_photo,
+            bio: u.bio,
+            skills,
+            contact_links,
+            display_order: 99,
+            role: u.role || 'Member',
+            project_contributions,
+            committee_info: {
+              id: targetCommittee.id,
+              committee_number: targetCommittee.committee_number,
+              title: targetCommittee.title,
+              session_years: targetCommittee.session_years,
+              is_current: targetCommittee.is_current
+            }
+          };
+        });
+
+        members = [...members, ...otherMembers];
+      } catch (appendErr) {
+        console.warn('Could not append extra members:', appendErr.message);
+      }
     }
 
     // Fallback if committee_members table has no entries for target committee
@@ -213,9 +290,23 @@ router.get('/committees/current', async (req, res) => {
     }
 
     const members = await allQuery(`
-      SELECT cm.*, u.role as system_role
+      SELECT cm.id, cm.committee_id,
+             COALESCE(cm.user_id, u.id) as user_id,
+             CASE WHEN cm.is_override = 1 THEN cm.name ELSE COALESCE(u.name, cm.name) END as name,
+             COALESCE(u.email, cm.email) as email,
+             CASE WHEN cm.is_override = 1 THEN cm.department ELSE COALESCE(u.department, cm.department) END as department,
+             COALESCE(u.student_id, cm.student_id) as student_id,
+             cm.designation,
+             cm.category,
+             cm.is_override,
+             CASE WHEN cm.is_override = 1 THEN cm.profile_photo ELSE COALESCE(NULLIF(u.profile_photo, ''), cm.profile_photo) END as profile_photo,
+             CASE WHEN cm.is_override = 1 THEN cm.bio ELSE COALESCE(NULLIF(u.bio, ''), cm.bio) END as bio,
+             CASE WHEN cm.is_override = 1 THEN cm.skills ELSE COALESCE(NULLIF(u.skills, ''), cm.skills) END as skills,
+             CASE WHEN cm.is_override = 1 THEN cm.social_links ELSE COALESCE(NULLIF(u.contact_links, ''), cm.social_links) END as social_links,
+             cm.display_order,
+             COALESCE(u.role, CASE WHEN cm.category = 'Executive' OR cm.category = 'Advisor' THEN 'Executive' ELSE 'Member' END) as system_role
       FROM committee_members cm
-      LEFT JOIN users u ON cm.user_id = u.id
+      LEFT JOIN users u ON (cm.user_id = u.id OR (cm.email IS NOT NULL AND cm.email != '' AND LOWER(cm.email) = LOWER(u.email)))
       WHERE cm.committee_id = ?
       ORDER BY 
         CASE 
@@ -268,9 +359,23 @@ router.get('/committees/:id', async (req, res) => {
     }
 
     const members = await allQuery(`
-      SELECT cm.*, u.role as system_role
+      SELECT cm.id, cm.committee_id,
+             COALESCE(cm.user_id, u.id) as user_id,
+             CASE WHEN cm.is_override = 1 THEN cm.name ELSE COALESCE(u.name, cm.name) END as name,
+             COALESCE(u.email, cm.email) as email,
+             CASE WHEN cm.is_override = 1 THEN cm.department ELSE COALESCE(u.department, cm.department) END as department,
+             COALESCE(u.student_id, cm.student_id) as student_id,
+             cm.designation,
+             cm.category,
+             cm.is_override,
+             CASE WHEN cm.is_override = 1 THEN cm.profile_photo ELSE COALESCE(NULLIF(u.profile_photo, ''), cm.profile_photo) END as profile_photo,
+             CASE WHEN cm.is_override = 1 THEN cm.bio ELSE COALESCE(NULLIF(u.bio, ''), cm.bio) END as bio,
+             CASE WHEN cm.is_override = 1 THEN cm.skills ELSE COALESCE(NULLIF(u.skills, ''), cm.skills) END as skills,
+             CASE WHEN cm.is_override = 1 THEN cm.social_links ELSE COALESCE(NULLIF(u.contact_links, ''), cm.social_links) END as social_links,
+             cm.display_order,
+             COALESCE(u.role, CASE WHEN cm.category = 'Executive' OR cm.category = 'Advisor' THEN 'Executive' ELSE 'Member' END) as system_role
       FROM committee_members cm
-      LEFT JOIN users u ON cm.user_id = u.id
+      LEFT JOIN users u ON (cm.user_id = u.id OR (cm.email IS NOT NULL AND cm.email != '' AND LOWER(cm.email) = LOWER(u.email)))
       WHERE cm.committee_id = ?
       ORDER BY 
         CASE 
@@ -309,26 +414,125 @@ router.get('/committees/:id', async (req, res) => {
   }
 });
 
-// GET /api/members/:id: Dynamic member profile page details
+// GET /api/members/:id: Dynamic member profile page details (supports user ID, committee member ID, or student ID)
 router.get('/members/:id', async (req, res) => {
   try {
-    const member = await getQuery(
-      `SELECT id, name, email, role, status, committee_role, department, student_id,
-              bio, skills, profile_photo, contact_links, project_contributions, created_at
-       FROM users WHERE id = ? AND status = 'approved'`,
-      [req.params.id]
-    );
+    const rawId = req.params.id;
+    if (!rawId || rawId === 'null' || rawId === 'undefined') {
+      return res.status(404).json({ error: 'Invalid member identifier' });
+    }
+
+    let member = null;
+    const isNum = !isNaN(rawId);
+
+    // 1. Try finding in users table by user ID
+    if (isNum) {
+      member = await getQuery(
+        `SELECT u.id, u.name, u.email, u.role, u.status, u.committee_role, u.department, u.student_id,
+                u.bio, u.skills, u.profile_photo, u.contact_links, u.project_contributions, u.created_at,
+                cm.designation as cm_designation, cm.category as cm_category
+         FROM users u
+         LEFT JOIN committee_members cm ON (cm.user_id = u.id OR (cm.email IS NOT NULL AND cm.email != '' AND LOWER(cm.email) = LOWER(u.email)))
+         WHERE u.id = ?`,
+        [parseInt(rawId, 10)]
+      );
+
+      if (member && member.cm_designation) {
+        member.committee_role = member.cm_designation;
+      }
+    }
+
+    // 2. If not found by user ID, try finding in committee_members table by cm.id
+    if (!member && isNum) {
+      const cm = await getQuery(
+        `SELECT cm.*, u.id as user_actual_id, u.role as user_role, u.status as user_status,
+                u.bio as user_bio, u.skills as user_skills, u.profile_photo as user_photo,
+                u.contact_links as user_links, u.project_contributions as user_projects,
+                u.name as user_actual_name, u.department as user_dept, u.student_id as user_student_id
+         FROM committee_members cm
+         LEFT JOIN users u ON (cm.user_id = u.id OR (cm.email IS NOT NULL AND cm.email != '' AND LOWER(cm.email) = LOWER(u.email)))
+         WHERE cm.id = ?`,
+        [parseInt(rawId, 10)]
+      );
+
+      if (cm) {
+        member = {
+          id: cm.user_actual_id || cm.id,
+          name: (cm.is_override === 1) ? cm.name : (cm.user_actual_name || cm.name),
+          email: cm.email,
+          role: cm.user_role || (cm.category === 'Executive' || cm.category === 'Advisor' ? 'Executive' : 'Member'),
+          status: cm.user_status || 'approved',
+          committee_role: cm.designation,
+          department: (cm.is_override === 1) ? cm.department : (cm.user_dept || cm.department),
+          student_id: cm.user_student_id || cm.student_id,
+          bio: (cm.is_override === 1 || !cm.user_bio) ? cm.bio : cm.user_bio,
+          skills: (cm.is_override === 1 || !cm.user_skills) ? cm.skills : cm.user_skills,
+          profile_photo: (cm.is_override === 1 || !cm.user_photo) ? cm.profile_photo : cm.user_photo,
+          contact_links: (cm.is_override === 1 || !cm.user_links) ? cm.social_links : cm.user_links,
+          project_contributions: cm.user_projects || '[]',
+          created_at: cm.created_at
+        };
+      }
+    }
+
+    // 3. Try finding in users by student_id or email
+    if (!member) {
+      member = await getQuery(
+        `SELECT u.id, u.name, u.email, u.role, u.status, u.committee_role, u.department, u.student_id,
+                u.bio, u.skills, u.profile_photo, u.contact_links, u.project_contributions, u.created_at,
+                cm.designation as cm_designation
+         FROM users u
+         LEFT JOIN committee_members cm ON (cm.user_id = u.id OR (cm.email IS NOT NULL AND cm.email != '' AND LOWER(cm.email) = LOWER(u.email)))
+         WHERE LOWER(u.student_id) = LOWER(?) OR LOWER(u.email) = LOWER(?)`,
+        [rawId, rawId]
+      );
+      if (member && member.cm_designation) {
+        member.committee_role = member.cm_designation;
+      }
+    }
+
+    // 4. Also try committee_members by student_id or email
+    if (!member) {
+      const cm = await getQuery(
+        `SELECT cm.*, u.id as user_actual_id, u.role as user_role, u.status as user_status,
+                u.bio as user_bio, u.skills as user_skills, u.profile_photo as user_photo,
+                u.contact_links as user_links, u.project_contributions as user_projects,
+                u.name as user_actual_name, u.department as user_dept, u.student_id as user_student_id
+         FROM committee_members cm
+         LEFT JOIN users u ON (cm.user_id = u.id OR (cm.email IS NOT NULL AND cm.email != '' AND LOWER(cm.email) = LOWER(u.email)))
+         WHERE LOWER(cm.student_id) = LOWER(?) OR LOWER(cm.email) = LOWER(?)`,
+        [rawId, rawId]
+      );
+      if (cm) {
+        member = {
+          id: cm.user_actual_id || cm.id,
+          name: (cm.is_override === 1) ? cm.name : (cm.user_actual_name || cm.name),
+          email: cm.email,
+          role: cm.user_role || (cm.category === 'Executive' || cm.category === 'Advisor' ? 'Executive' : 'Member'),
+          status: cm.user_status || 'approved',
+          committee_role: cm.designation,
+          department: (cm.is_override === 1) ? cm.department : (cm.user_dept || cm.department),
+          student_id: cm.user_student_id || cm.student_id,
+          bio: (cm.is_override === 1 || !cm.user_bio) ? cm.bio : cm.user_bio,
+          skills: (cm.is_override === 1 || !cm.user_skills) ? cm.skills : cm.user_skills,
+          profile_photo: (cm.is_override === 1 || !cm.user_photo) ? cm.profile_photo : cm.user_photo,
+          contact_links: (cm.is_override === 1 || !cm.user_links) ? cm.social_links : cm.user_links,
+          project_contributions: cm.user_projects || '[]',
+          created_at: cm.created_at
+        };
+      }
+    }
 
     if (!member) {
-      return res.status(404).json({ error: 'Member not found or not currently approved' });
+      return res.status(404).json({ error: 'Member not found or not approved' });
     }
 
     let skills = [];
     let contact_links = {};
     let project_contributions = [];
-    try { skills = member.skills ? JSON.parse(member.skills) : []; } catch (e) {}
-    try { contact_links = member.contact_links ? JSON.parse(member.contact_links) : {}; } catch (e) {}
-    try { project_contributions = member.project_contributions ? JSON.parse(member.project_contributions) : []; } catch (e) {}
+    try { skills = member.skills ? (typeof member.skills === 'string' ? JSON.parse(member.skills) : member.skills) : []; } catch (e) {}
+    try { contact_links = member.contact_links ? (typeof member.contact_links === 'string' ? JSON.parse(member.contact_links) : member.contact_links) : {}; } catch (e) {}
+    try { project_contributions = member.project_contributions ? (typeof member.project_contributions === 'string' ? JSON.parse(member.project_contributions) : member.project_contributions) : []; } catch (e) {}
 
     res.json({
       success: true,
@@ -923,12 +1127,13 @@ router.get('/member/project-proposals', authenticate, async (req, res) => {
 // PUT /api/member/profile: Member updates their own profile
 router.put('/member/profile', authenticate, async (req, res) => {
   try {
-    const { name, bio, skills, profile_photo, contact_links, department } = req.body;
+    const { name, bio, skills, profile_photo, contact_links, department, student_id } = req.body;
     const userId = req.user.id;
 
     const skillsJson = Array.isArray(skills) ? JSON.stringify(skills) : JSON.stringify([]);
     const contactLinksJson = typeof contact_links === 'object' ? JSON.stringify(contact_links) : JSON.stringify({});
 
+    // 1. Update users table
     await runQuery(
       `UPDATE users
        SET name = COALESCE(?, name),
@@ -936,15 +1141,35 @@ router.put('/member/profile', authenticate, async (req, res) => {
            skills = ?,
            profile_photo = COALESCE(?, profile_photo),
            contact_links = ?,
-           department = COALESCE(?, department)
+           department = COALESCE(?, department),
+           student_id = COALESCE(?, student_id)
        WHERE id = ?`,
-      [name, bio, skillsJson, profile_photo, contactLinksJson, department, userId]
+      [name, bio, skillsJson, profile_photo, contactLinksJson, department, student_id, userId]
     );
 
     const updatedUser = await getQuery(
-      'SELECT id, name, email, role, status, committee_role, department, bio, skills, profile_photo, contact_links, project_contributions FROM users WHERE id = ?',
+      'SELECT id, name, email, role, status, committee_role, department, student_id, bio, skills, profile_photo, contact_links, project_contributions FROM users WHERE id = ?',
       [userId]
     );
+
+    // 2. Synchronize to committee_members so changes appear live all across the site
+    try {
+      await runQuery(
+        `UPDATE committee_members
+         SET name = COALESCE(?, name),
+             bio = COALESCE(?, bio),
+             skills = ?,
+             profile_photo = COALESCE(?, profile_photo),
+             social_links = ?,
+             department = COALESCE(?, department),
+             student_id = COALESCE(?, student_id),
+             user_id = ?
+         WHERE user_id = ? OR (email IS NOT NULL AND email != '' AND LOWER(email) = LOWER(?))`,
+        [name, bio, skillsJson, profile_photo, contactLinksJson, department, student_id, userId, userId, updatedUser?.email || '']
+      );
+    } catch (cmErr) {
+      console.warn('Sync to committee_members warning:', cmErr.message);
+    }
 
     let parsedSkills = [];
     let parsedLinks = {};
@@ -953,7 +1178,7 @@ router.put('/member/profile', authenticate, async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Profile updated successfully! Your public directory card has been updated.',
+      message: 'Profile updated successfully! Your updates are now live all across the website.',
       data: {
         ...updatedUser,
         skills: parsedSkills,
@@ -1108,6 +1333,24 @@ router.put('/admin/users/:id', authenticate, requireAdmin, async (req, res) => {
        WHERE id = ?`,
       [name, email, role, status, committee_role, department, student_id, bio, skillsJson, profile_photo, req.params.id]
     );
+
+    // Also sync to committee_members if linked
+    try {
+      const targetUser = await getQuery('SELECT email FROM users WHERE id = ?', [req.params.id]);
+      await runQuery(
+        `UPDATE committee_members
+         SET name = COALESCE(?, name),
+             email = COALESCE(?, email),
+             department = COALESCE(?, department),
+             student_id = COALESCE(?, student_id),
+             bio = COALESCE(?, bio),
+             skills = COALESCE(?, skills),
+             profile_photo = COALESCE(?, profile_photo),
+             user_id = ?
+         WHERE user_id = ? OR (email IS NOT NULL AND email != '' AND LOWER(email) = LOWER(?))`,
+        [name, email, department, student_id, bio, skillsJson, profile_photo, req.params.id, req.params.id, targetUser?.email || '']
+      );
+    } catch (cmErr) {}
 
     res.json({ success: true, message: 'User updated successfully' });
   } catch (err) {

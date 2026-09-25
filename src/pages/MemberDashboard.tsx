@@ -33,6 +33,7 @@ export const MemberDashboard: React.FC = () => {
   const [formData, setFormData] = useState({
     name: '',
     department: '',
+    student_id: '',
     bio: '',
     profile_photo: '',
     skillsString: '',
@@ -79,6 +80,7 @@ export const MemberDashboard: React.FC = () => {
       setFormData({
         name: p.name || '',
         department: p.department || '',
+        student_id: p.student_id || '',
         bio: p.bio || '',
         profile_photo: p.profile_photo || '',
         skillsString: p.skills ? p.skills.join(', ') : '',
@@ -167,6 +169,7 @@ export const MemberDashboard: React.FC = () => {
         body: JSON.stringify({
           name: formData.name,
           department: formData.department,
+          student_id: formData.student_id,
           bio: formData.bio,
           profile_photo: formData.profile_photo,
           skills: skillsArray,
@@ -289,7 +292,7 @@ export const MemberDashboard: React.FC = () => {
               )}
 
               <form onSubmit={handleProfileSave} className="space-y-4">
-                <div className="grid sm:grid-cols-2 gap-4">
+                <div className="grid sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wide">
                       Display Name
@@ -300,6 +303,19 @@ export const MemberDashboard: React.FC = () => {
                       value={formData.name}
                       onChange={e => setFormData({ ...formData, name: e.target.value })}
                       className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/90 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-indigo-500 shadow-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wide">
+                      Student ID / Roll
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. JSTU-EEE-20111221"
+                      value={formData.student_id}
+                      onChange={e => setFormData({ ...formData, student_id: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/90 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-indigo-500 shadow-xs font-mono"
                     />
                   </div>
 

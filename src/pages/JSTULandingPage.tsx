@@ -1216,7 +1216,7 @@ export const JSTULandingPage: React.FC = () => {
                       ID: {m.student_id || `JSTU-${m.id}`}
                     </span>
                     <Link
-                      to={`/members/${m.id}`}
+                      to={`/members/${m.user_id || m.id}`}
                       className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors group-hover:translate-x-1 duration-200"
                     >
                       <span>View Profile</span>

@@ -438,17 +438,13 @@ export const CommitteesPage: React.FC = () => {
                           {m.student_id ? `ID: ${m.student_id}` : `Tenure: #${committeeDetails.committee_number}`}
                         </span>
 
-                        {m.user_id ? (
-                          <Link
-                            to={`/members/${m.user_id}`}
-                            className="inline-flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 hover:underline text-xs"
-                          >
-                            <span>Profile</span>
-                            <ArrowRight className="w-3.5 h-3.5" />
-                          </Link>
-                        ) : (
-                          <span className="text-[11px] text-slate-400 font-bold">Committee Alumni</span>
-                        )}
+                        <Link
+                          to={`/members/${m.user_id || m.id}`}
+                          className="inline-flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 hover:underline text-xs"
+                        >
+                          <span>Profile</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </Link>
                       </div>
                     </div>
                   );
