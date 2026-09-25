@@ -4,6 +4,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "node -e \"console.log('Backend build completed')\"",
     "start": "node index.js",
     "dev": "nodemon index.js",
     "dev:admin": "nodemon server-with-payload.js",
