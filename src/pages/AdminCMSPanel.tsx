@@ -5,9 +5,10 @@ import {
   XCircle, Plus, Save, AlertCircle, RefreshCw, 
   Layers, Bell, Tag, FileText, Globe, ArrowLeft, Cpu,
   Sliders, ToggleLeft, ToggleRight, Sparkles, Layout, Eye, EyeOff, Calendar,
-  Landmark, Copy, Crown, Award, Check, ExternalLink, GraduationCap, ChevronRight
+  Landmark, Copy, Crown, Award, Check, ExternalLink, GraduationCap, ChevronRight, Camera, Upload
 } from 'lucide-react';
 import JSTUHeader from '../components/JSTUHeader';
+import { fileToBase64Image } from '../utils/imageHelper';
 
 export const AdminCMSPanel: React.FC = () => {
   const navigate = useNavigate();
@@ -24,6 +25,16 @@ export const AdminCMSPanel: React.FC = () => {
   });
   const [loading, setLoading] = useState(true);
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const handleImageFileToBase64 = async (file: File, onSuccess: (base64: string) => void) => {
+    try {
+      const base64 = await fileToBase64Image(file);
+      onSuccess(base64);
+      showToast('success', 'Image processed & ready to save!');
+    } catch (err: any) {
+      showToast('error', err.message || 'Failed to process image');
+    }
+  };
 
   // Current admin session
   const currentUser = (() => {
@@ -3467,6 +3478,53 @@ export const AdminCMSPanel: React.FC = () => {
                 </div>
 
                 <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Profile Photo</label>
+                  <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+                    <img
+                      src={editingUser.profile_photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(editingUser.name || 'Member')}`}
+                      alt="User avatar preview"
+                      className="w-14 h-14 rounded-2xl object-cover border-2 border-indigo-500/40 shadow-xs flex-shrink-0"
+                      onError={(e) => {
+                        e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(editingUser.name || 'Member')}`;
+                      }}
+                    />
+                    <div className="flex-1 space-y-1.5 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-xs transition-all active:scale-95">
+                          <Camera className="w-3.5 h-3.5" />
+                          <span>Upload Photo</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) handleImageFileToBase64(f, (b64) => setEditingUser({ ...editingUser, profile_photo: b64 }));
+                            }}
+                            className="hidden"
+                          />
+                        </label>
+                        {editingUser.profile_photo && (
+                          <button
+                            type="button"
+                            onClick={() => setEditingUser({ ...editingUser, profile_photo: '' })}
+                            className="px-2.5 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-300"
+                          >
+                            Reset
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="url"
+                        placeholder="Or enter public photo URL: https://..."
+                        value={editingUser.profile_photo || ''}
+                        onChange={e => setEditingUser({ ...editingUser, profile_photo: e.target.value })}
+                        className="w-full px-3 py-1.5 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Bio</label>
                   <textarea
                     rows={2}
@@ -4092,26 +4150,61 @@ export const AdminCMSPanel: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Profile Photo URL</label>
-                    <input
-                      type="url"
-                      placeholder="https://..."
-                      value={newCommitteeMember.profile_photo}
-                      onChange={e => setNewCommitteeMember({ ...newCommitteeMember, profile_photo: e.target.value })}
-                      className="w-full px-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-none focus:border-indigo-500"
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Profile Photo</label>
+                  <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 mb-3">
+                    <img
+                      src={newCommitteeMember.profile_photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(newCommitteeMember.name || 'Member')}`}
+                      alt="Photo preview"
+                      className="w-12 h-12 rounded-xl object-cover border-2 border-indigo-500/40 shadow-xs flex-shrink-0"
+                      onError={(e) => {
+                        e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(newCommitteeMember.name || 'Member')}`;
+                      }}
                     />
+                    <div className="flex-1 space-y-1.5 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-xs transition-all active:scale-95">
+                          <Camera className="w-3.5 h-3.5" />
+                          <span>Upload Photo</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) handleImageFileToBase64(f, (b64) => setNewCommitteeMember({ ...newCommitteeMember, profile_photo: b64 }));
+                            }}
+                            className="hidden"
+                          />
+                        </label>
+                        {newCommitteeMember.profile_photo && (
+                          <button
+                            type="button"
+                            onClick={() => setNewCommitteeMember({ ...newCommitteeMember, profile_photo: '' })}
+                            className="px-2.5 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-300"
+                          >
+                            Reset
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="url"
+                        placeholder="Or enter public photo URL: https://..."
+                        value={newCommitteeMember.profile_photo}
+                        onChange={e => setNewCommitteeMember({ ...newCommitteeMember, profile_photo: e.target.value })}
+                        className="w-full px-3 py-1.5 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Display Order</label>
-                    <input
-                      type="number"
-                      value={newCommitteeMember.display_order}
-                      onChange={e => setNewCommitteeMember({ ...newCommitteeMember, display_order: parseInt(e.target.value) || 0 })}
-                      className="w-full px-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Display Order</label>
+                  <input
+                    type="number"
+                    value={newCommitteeMember.display_order}
+                    onChange={e => setNewCommitteeMember({ ...newCommitteeMember, display_order: parseInt(e.target.value) || 0 })}
+                    className="w-full px-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-none focus:border-indigo-500"
+                  />
                 </div>
 
                 <div>
@@ -4249,25 +4342,61 @@ export const AdminCMSPanel: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Profile Photo URL</label>
-                    <input
-                      type="url"
-                      value={editingCommitteeMember.profile_photo || ''}
-                      onChange={e => setEditingCommitteeMember({ ...editingCommitteeMember, profile_photo: e.target.value })}
-                      className="w-full px-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-none focus:border-indigo-500"
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Profile Photo</label>
+                  <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 mb-3">
+                    <img
+                      src={editingCommitteeMember.profile_photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(editingCommitteeMember.name || 'Member')}`}
+                      alt="Photo preview"
+                      className="w-12 h-12 rounded-xl object-cover border-2 border-indigo-500/40 shadow-xs flex-shrink-0"
+                      onError={(e) => {
+                        e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(editingCommitteeMember.name || 'Member')}`;
+                      }}
                     />
+                    <div className="flex-1 space-y-1.5 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-xs transition-all active:scale-95">
+                          <Camera className="w-3.5 h-3.5" />
+                          <span>Upload Photo</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) handleImageFileToBase64(f, (b64) => setEditingCommitteeMember({ ...editingCommitteeMember, profile_photo: b64 }));
+                            }}
+                            className="hidden"
+                          />
+                        </label>
+                        {editingCommitteeMember.profile_photo && (
+                          <button
+                            type="button"
+                            onClick={() => setEditingCommitteeMember({ ...editingCommitteeMember, profile_photo: '' })}
+                            className="px-2.5 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-300"
+                          >
+                            Reset
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="url"
+                        placeholder="Or enter public photo URL: https://..."
+                        value={editingCommitteeMember.profile_photo || ''}
+                        onChange={e => setEditingCommitteeMember({ ...editingCommitteeMember, profile_photo: e.target.value })}
+                        className="w-full px-3 py-1.5 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Display Order</label>
-                    <input
-                      type="number"
-                      value={editingCommitteeMember.display_order ?? 0}
-                      onChange={e => setEditingCommitteeMember({ ...editingCommitteeMember, display_order: parseInt(e.target.value) || 0 })}
-                      className="w-full px-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Display Order</label>
+                  <input
+                    type="number"
+                    value={editingCommitteeMember.display_order ?? 0}
+                    onChange={e => setEditingCommitteeMember({ ...editingCommitteeMember, display_order: parseInt(e.target.value) || 0 })}
+                    className="w-full px-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-none focus:border-indigo-500"
+                  />
                 </div>
 
                 <div>

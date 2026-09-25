@@ -387,9 +387,12 @@ export const CommitteesPage: React.FC = () => {
                         {/* Member Header with Photo & Badge */}
                         <div className="flex items-start gap-3.5 mb-3.5">
                           <img
-                            src={m.profile_photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${m.name}`}
+                            src={m.profile_photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(m.name)}`}
                             alt={m.name}
                             className="w-14 h-14 rounded-2xl object-cover border-2 border-indigo-500/20 group-hover:border-indigo-500 transition-colors shadow-sm"
+                            onError={(e) => {
+                              e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(m.name)}`;
+                            }}
                           />
                           <div className="flex-1 min-w-0">
                             <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border mb-1.5 ${categoryBadge.style}`}>

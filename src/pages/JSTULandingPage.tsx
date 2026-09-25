@@ -1156,9 +1156,12 @@ export const JSTULandingPage: React.FC = () => {
                   <div>
                     <div className="flex items-start gap-4 mb-4">
                       <img
-                        src={m.profile_photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${m.name}`}
+                        src={m.profile_photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(m.name)}`}
                         alt={m.name}
                         className="w-16 h-16 rounded-2xl object-cover border-2 border-indigo-500/30 group-hover:border-indigo-500 transition-colors shadow-md"
+                        onError={(e) => {
+                          e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(m.name)}`;
+                        }}
                       />
                       <div className="flex-1 min-w-0">
                         <div className="mb-1">

@@ -3,9 +3,10 @@ import { useNavigate, Link } from 'react-router-dom';
 import { 
   User, LayoutDashboard, Bell, ShieldCheck, Cpu, 
   Save, Sparkles, CheckCircle2, AlertCircle, ExternalLink, 
-  Plus, X, Image as ImageIcon, Github, Linkedin, Mail, ArrowRight 
+  Plus, X, Image as ImageIcon, Github, Linkedin, Mail, ArrowRight, Upload, Camera 
 } from 'lucide-react';
 import JSTUHeader from '../components/JSTUHeader';
+import { fileToBase64Image } from '../utils/imageHelper';
 
 export const MemberDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -43,6 +44,23 @@ export const MemberDashboard: React.FC = () => {
 
   const [saveStatus, setSaveStatus] = useState<{ success?: boolean; message?: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+
+  const handlePhotoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsProcessingImage(true);
+    setImageError(null);
+    try {
+      const base64 = await fileToBase64Image(file);
+      setFormData(prev => ({ ...prev, profile_photo: base64 }));
+    } catch (err: any) {
+      setImageError(err.message || 'Failed to process image');
+    } finally {
+      setIsProcessingImage(false);
+    }
+  };
 
   useEffect(() => {
     fetchDashboardData();
@@ -334,23 +352,71 @@ export const MemberDashboard: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wide">
-                    Profile Photo URL
+                    Profile Photo
                   </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="url"
-                      placeholder="https://..."
-                      value={formData.profile_photo}
-                      onChange={e => setFormData({ ...formData, profile_photo: e.target.value })}
-                      className="flex-1 px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/90 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:border-indigo-500 shadow-xs"
-                    />
-                    {formData.profile_photo && (
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800">
+                    <div className="relative group flex-shrink-0">
                       <img
-                        src={formData.profile_photo}
-                        alt="Preview"
-                        className="w-11 h-11 rounded-xl object-cover border-2 border-indigo-500/40 shadow-xs"
+                        src={formData.profile_photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(formData.name || 'Member')}`}
+                        alt="Profile preview"
+                        className="w-20 h-20 rounded-2xl object-cover border-2 border-indigo-500/40 shadow-md"
+                        onError={(e) => {
+                          e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(formData.name || 'Member')}`;
+                        }}
                       />
-                    )}
+                      {formData.profile_photo && (
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, profile_photo: '' })}
+                          className="absolute -top-1.5 -right-1.5 p-1 rounded-full bg-red-500 text-white hover:bg-red-600 shadow-sm"
+                          title="Reset to default avatar"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex-1 space-y-2 w-full min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label className="cursor-pointer inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-sm transition-all active:scale-95">
+                          <Camera className="w-3.5 h-3.5" />
+                          <span>{isProcessingImage ? 'Optimizing Image...' : 'Upload Image File'}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handlePhotoFileChange}
+                            disabled={isProcessingImage}
+                            className="hidden"
+                          />
+                        </label>
+
+                        {formData.profile_photo && (
+                          <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, profile_photo: '' })}
+                            className="px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors"
+                          >
+                            Reset Avatar
+                          </button>
+                        )}
+                      </div>
+
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Upload any JPG, PNG, or WebP photo from your device. Or paste an image URL below:
+                      </p>
+
+                      <input
+                        type="url"
+                        placeholder="Or enter public image URL: https://..."
+                        value={formData.profile_photo}
+                        onChange={e => setFormData({ ...formData, profile_photo: e.target.value })}
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs focus:outline-none focus:border-indigo-500 shadow-xs"
+                      />
+
+                      {imageError && (
+                        <p className="text-xs text-red-500 font-medium">{imageError}</p>
+                      )}
+                    </div>
                   </div>
                 </div>
 

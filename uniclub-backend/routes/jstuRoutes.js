@@ -106,7 +106,13 @@ router.get('/members', async (req, res) => {
                cm.designation as committee_role,
                cm.category,
                cm.is_override,
-               CASE WHEN cm.is_override = 1 THEN cm.profile_photo ELSE COALESCE(NULLIF(u.profile_photo, ''), cm.profile_photo) END as profile_photo,
+               CASE 
+                 WHEN cm.profile_photo IS NOT NULL AND cm.profile_photo != '' AND cm.profile_photo NOT LIKE '%api.dicebear.com%' THEN cm.profile_photo
+                 WHEN u.profile_photo IS NOT NULL AND u.profile_photo != '' AND u.profile_photo NOT LIKE '%api.dicebear.com%' THEN u.profile_photo
+                 WHEN cm.profile_photo IS NOT NULL AND cm.profile_photo != '' THEN cm.profile_photo
+                 WHEN u.profile_photo IS NOT NULL AND u.profile_photo != '' THEN u.profile_photo
+                 ELSE NULL 
+               END as profile_photo,
                CASE WHEN cm.is_override = 1 THEN cm.bio ELSE COALESCE(NULLIF(u.bio, ''), cm.bio) END as bio,
                CASE WHEN cm.is_override = 1 THEN cm.skills ELSE COALESCE(NULLIF(u.skills, ''), cm.skills) END as skills,
                CASE WHEN cm.is_override = 1 THEN cm.social_links ELSE COALESCE(NULLIF(u.contact_links, ''), cm.social_links) END as contact_links,
@@ -299,7 +305,13 @@ router.get('/committees/current', async (req, res) => {
              cm.designation,
              cm.category,
              cm.is_override,
-             CASE WHEN cm.is_override = 1 THEN cm.profile_photo ELSE COALESCE(NULLIF(u.profile_photo, ''), cm.profile_photo) END as profile_photo,
+             CASE 
+               WHEN cm.profile_photo IS NOT NULL AND cm.profile_photo != '' AND cm.profile_photo NOT LIKE '%api.dicebear.com%' THEN cm.profile_photo
+               WHEN u.profile_photo IS NOT NULL AND u.profile_photo != '' AND u.profile_photo NOT LIKE '%api.dicebear.com%' THEN u.profile_photo
+               WHEN cm.profile_photo IS NOT NULL AND cm.profile_photo != '' THEN cm.profile_photo
+               WHEN u.profile_photo IS NOT NULL AND u.profile_photo != '' THEN u.profile_photo
+               ELSE NULL 
+             END as profile_photo,
              CASE WHEN cm.is_override = 1 THEN cm.bio ELSE COALESCE(NULLIF(u.bio, ''), cm.bio) END as bio,
              CASE WHEN cm.is_override = 1 THEN cm.skills ELSE COALESCE(NULLIF(u.skills, ''), cm.skills) END as skills,
              CASE WHEN cm.is_override = 1 THEN cm.social_links ELSE COALESCE(NULLIF(u.contact_links, ''), cm.social_links) END as social_links,
@@ -368,7 +380,13 @@ router.get('/committees/:id', async (req, res) => {
              cm.designation,
              cm.category,
              cm.is_override,
-             CASE WHEN cm.is_override = 1 THEN cm.profile_photo ELSE COALESCE(NULLIF(u.profile_photo, ''), cm.profile_photo) END as profile_photo,
+             CASE 
+               WHEN cm.profile_photo IS NOT NULL AND cm.profile_photo != '' AND cm.profile_photo NOT LIKE '%api.dicebear.com%' THEN cm.profile_photo
+               WHEN u.profile_photo IS NOT NULL AND u.profile_photo != '' AND u.profile_photo NOT LIKE '%api.dicebear.com%' THEN u.profile_photo
+               WHEN cm.profile_photo IS NOT NULL AND cm.profile_photo != '' THEN cm.profile_photo
+               WHEN u.profile_photo IS NOT NULL AND u.profile_photo != '' THEN u.profile_photo
+               ELSE NULL 
+             END as profile_photo,
              CASE WHEN cm.is_override = 1 THEN cm.bio ELSE COALESCE(NULLIF(u.bio, ''), cm.bio) END as bio,
              CASE WHEN cm.is_override = 1 THEN cm.skills ELSE COALESCE(NULLIF(u.skills, ''), cm.skills) END as skills,
              CASE WHEN cm.is_override = 1 THEN cm.social_links ELSE COALESCE(NULLIF(u.contact_links, ''), cm.social_links) END as social_links,
@@ -467,7 +485,7 @@ router.get('/members/:id', async (req, res) => {
           student_id: cm.user_student_id || cm.student_id,
           bio: (cm.is_override === 1 || !cm.user_bio) ? cm.bio : cm.user_bio,
           skills: (cm.is_override === 1 || !cm.user_skills) ? cm.skills : cm.user_skills,
-          profile_photo: (cm.is_override === 1 || !cm.user_photo) ? cm.profile_photo : cm.user_photo,
+          profile_photo: ((cm.profile_photo && !cm.profile_photo.includes('api.dicebear.com')) ? cm.profile_photo : (cm.user_photo && !cm.user_photo.includes('api.dicebear.com')) ? cm.user_photo : (cm.profile_photo || cm.user_photo || '')),
           contact_links: (cm.is_override === 1 || !cm.user_links) ? cm.social_links : cm.user_links,
           project_contributions: cm.user_projects || '[]',
           created_at: cm.created_at
@@ -515,7 +533,7 @@ router.get('/members/:id', async (req, res) => {
           student_id: cm.user_student_id || cm.student_id,
           bio: (cm.is_override === 1 || !cm.user_bio) ? cm.bio : cm.user_bio,
           skills: (cm.is_override === 1 || !cm.user_skills) ? cm.skills : cm.user_skills,
-          profile_photo: (cm.is_override === 1 || !cm.user_photo) ? cm.profile_photo : cm.user_photo,
+          profile_photo: ((cm.profile_photo && !cm.profile_photo.includes('api.dicebear.com')) ? cm.profile_photo : (cm.user_photo && !cm.user_photo.includes('api.dicebear.com')) ? cm.user_photo : (cm.profile_photo || cm.user_photo || '')),
           contact_links: (cm.is_override === 1 || !cm.user_links) ? cm.social_links : cm.user_links,
           project_contributions: cm.user_projects || '[]',
           created_at: cm.created_at
@@ -1129,6 +1147,7 @@ router.put('/member/profile', authenticate, async (req, res) => {
   try {
     const { name, bio, skills, profile_photo, contact_links, department, student_id } = req.body;
     const userId = req.user.id;
+    const cleanPhoto = (profile_photo && typeof profile_photo === 'string' && profile_photo.trim()) ? profile_photo.trim() : null;
 
     const skillsJson = Array.isArray(skills) ? JSON.stringify(skills) : JSON.stringify([]);
     const contactLinksJson = typeof contact_links === 'object' ? JSON.stringify(contact_links) : JSON.stringify({});
@@ -1144,7 +1163,7 @@ router.put('/member/profile', authenticate, async (req, res) => {
            department = COALESCE(?, department),
            student_id = COALESCE(?, student_id)
        WHERE id = ?`,
-      [name, bio, skillsJson, profile_photo, contactLinksJson, department, student_id, userId]
+      [name, bio, skillsJson, cleanPhoto, contactLinksJson, department, student_id, userId]
     );
 
     const updatedUser = await getQuery(
@@ -1165,7 +1184,7 @@ router.put('/member/profile', authenticate, async (req, res) => {
              student_id = COALESCE(?, student_id),
              user_id = ?
          WHERE user_id = ? OR (email IS NOT NULL AND email != '' AND LOWER(email) = LOWER(?))`,
-        [name, bio, skillsJson, profile_photo, contactLinksJson, department, student_id, userId, userId, updatedUser?.email || '']
+        [name, bio, skillsJson, cleanPhoto, contactLinksJson, department, student_id, userId, userId, updatedUser?.email || '']
       );
     } catch (cmErr) {
       console.warn('Sync to committee_members warning:', cmErr.message);
@@ -1316,6 +1335,7 @@ router.put('/admin/users/:id/status', authenticate, requireAdmin, async (req, re
 router.put('/admin/users/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     const { name, email, role, status, committee_role, department, student_id, bio, skills, profile_photo } = req.body;
+    const cleanPhoto = (profile_photo && typeof profile_photo === 'string' && profile_photo.trim()) ? profile_photo.trim() : null;
     const skillsJson = Array.isArray(skills) ? JSON.stringify(skills) : null;
 
     await runQuery(
@@ -1331,7 +1351,7 @@ router.put('/admin/users/:id', authenticate, requireAdmin, async (req, res) => {
            skills = COALESCE(?, skills),
            profile_photo = COALESCE(?, profile_photo)
        WHERE id = ?`,
-      [name, email, role, status, committee_role, department, student_id, bio, skillsJson, profile_photo, req.params.id]
+      [name, email, role, status, committee_role, department, student_id, bio, skillsJson, cleanPhoto, req.params.id]
     );
 
     // Also sync to committee_members if linked
@@ -1348,7 +1368,7 @@ router.put('/admin/users/:id', authenticate, requireAdmin, async (req, res) => {
              profile_photo = COALESCE(?, profile_photo),
              user_id = ?
          WHERE user_id = ? OR (email IS NOT NULL AND email != '' AND LOWER(email) = LOWER(?))`,
-        [name, email, department, student_id, bio, skillsJson, profile_photo, req.params.id, req.params.id, targetUser?.email || '']
+        [name, email, department, student_id, bio, skillsJson, cleanPhoto, req.params.id, req.params.id, targetUser?.email || '']
       );
     } catch (cmErr) {}
 
@@ -1736,8 +1756,28 @@ router.put('/admin/committees/members/:memberId', authenticate, requireAdmin, as
            skills = COALESCE(?, skills),
            display_order = COALESCE(?, display_order)
        WHERE id = ?`,
-      [name, email, department, student_id, designation, finalCategory, manualOverride, profile_photo, bio, skillsJson, display_order, req.params.memberId]
+      [name, email, department, student_id, designation, finalCategory, manualOverride, (profile_photo && profile_photo.trim()) ? profile_photo.trim() : null, bio, skillsJson, display_order, req.params.memberId]
     );
+
+    // Also synchronize profile changes to users table if this member has a linked user account
+    try {
+      const cm = await getQuery('SELECT user_id, email FROM committee_members WHERE id = ?', [req.params.memberId]);
+      if (cm) {
+        await runQuery(
+          `UPDATE users
+           SET profile_photo = COALESCE(?, profile_photo),
+               name = COALESCE(?, name),
+               bio = COALESCE(?, bio),
+               skills = COALESCE(?, skills),
+               department = COALESCE(?, department),
+               student_id = COALESCE(?, student_id)
+           WHERE (id IS NOT NULL AND id = ?) OR (email IS NOT NULL AND email != '' AND LOWER(email) = LOWER(?))`,
+          [(profile_photo && profile_photo.trim()) ? profile_photo.trim() : null, name, bio, skillsJson, department, student_id, cm.user_id, cm.email]
+        );
+      }
+    } catch (uErr) {
+      console.warn('Sync committee member to users warning:', uErr.message);
+    }
 
     const updated = await getQuery('SELECT * FROM committee_members WHERE id = ?', [req.params.memberId]);
     res.json({ success: true, message: 'Committee member updated', category: finalCategory, data: updated });

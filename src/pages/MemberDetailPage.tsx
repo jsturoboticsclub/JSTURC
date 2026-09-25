@@ -105,9 +105,12 @@ export const MemberDetailPage: React.FC = () => {
             <div className="flex flex-col items-center md:items-start text-center md:text-left flex-shrink-0">
               <div className="relative mb-3 sm:mb-4">
                 <img
-                  src={member.profile_photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${member.name}`}
+                  src={member.profile_photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(member.name)}`}
                   alt={member.name}
                   className="w-28 h-28 sm:w-40 sm:h-40 rounded-2xl sm:rounded-3xl object-cover border-4 border-indigo-500/40 shadow-xl"
+                  onError={(e) => {
+                    e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(member.name)}`;
+                  }}
                 />
                 <div className="absolute -bottom-2 -right-2 px-2.5 sm:px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white font-extrabold text-[9px] sm:text-[10px] tracking-wider uppercase shadow-md">
                   {member.role}
