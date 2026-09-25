@@ -209,6 +209,47 @@ export const MemberDetailPage: React.FC = () => {
                   )}
                 </div>
               </div>
+
+              {/* Committee Tenures & Academic Sessions Served */}
+              {member.committee_history && member.committee_history.length > 0 && (
+                <div className="mt-6 pt-5 border-t border-slate-200 dark:border-slate-800">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-1.5">
+                    <Award className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Committee Tenures & Sessions Served</span>
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {member.committee_history.map((ch: any, idx: number) => (
+                      <div
+                        key={idx}
+                        className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2"
+                      >
+                        <div>
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <span className="font-bold text-xs text-slate-900 dark:text-white">
+                              Committee #{ch.committee_number}
+                            </span>
+                            <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
+                              (Session {ch.session_years})
+                            </span>
+                          </div>
+                          <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 block">
+                            {ch.designation}
+                          </span>
+                        </div>
+                        {ch.is_current === 1 ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 border border-emerald-300 dark:border-emerald-600/40 flex-shrink-0">
+                            Active
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold text-slate-400 bg-slate-100 dark:bg-slate-800 flex-shrink-0">
+                            Alumni Tenure
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

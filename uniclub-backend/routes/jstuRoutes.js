@@ -552,13 +552,32 @@ router.get('/members/:id', async (req, res) => {
     try { contact_links = member.contact_links ? (typeof member.contact_links === 'string' ? JSON.parse(member.contact_links) : member.contact_links) : {}; } catch (e) {}
     try { project_contributions = member.project_contributions ? (typeof member.project_contributions === 'string' ? JSON.parse(member.project_contributions) : member.project_contributions) : []; } catch (e) {}
 
+    // Fetch all committee tenures & sessions this member has served in
+    let committee_history = [];
+    try {
+      committee_history = await allQuery(
+        `SELECT c.id as committee_id, c.committee_number, c.title as committee_title,
+                c.session_years, c.is_current, cm.designation, cm.category, cm.id as cm_id
+         FROM committee_members cm
+         JOIN committees c ON cm.committee_id = c.id
+         WHERE (cm.user_id IS NOT NULL AND cm.user_id = ?)
+            OR (cm.email IS NOT NULL AND cm.email != '' AND LOWER(cm.email) = LOWER(?))
+            OR (? IS NOT NULL AND ? != '' AND LOWER(cm.name) = LOWER(?))
+         ORDER BY c.committee_number DESC`,
+        [member.id, member.email || '', member.name || '', member.name || '', member.name || '']
+      );
+    } catch (chErr) {
+      console.warn('Error fetching committee history:', chErr.message);
+    }
+
     res.json({
       success: true,
       data: {
         ...member,
         skills,
         contact_links,
-        project_contributions
+        project_contributions,
+        committee_history
       }
     });
   } catch (err) {
@@ -1667,10 +1686,10 @@ router.delete('/admin/committees/:id', authenticate, requireAdmin, async (req, r
   }
 });
 
-// POST /api/admin/committees/:id/members: Add member to committee
+// POST /api/admin/committees/:id/members: Add member to one or multiple committee sessions
 router.post('/admin/committees/:id/members', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { user_id, name, email, department, student_id, designation, category, is_override, profile_photo, bio, skills, display_order } = req.body;
+    const { user_id, name, email, department, student_id, designation, category, is_override, profile_photo, bio, skills, display_order, target_committee_ids } = req.body;
     
     let memberName = name;
     let memberEmail = email;
@@ -1708,27 +1727,41 @@ router.post('/admin/committees/:id/members', authenticate, requireAdmin, async (
 
     const skillsJson = typeof memberSkills === 'string' ? memberSkills : JSON.stringify(memberSkills || []);
 
-    const result = await runQuery(
-      `INSERT INTO committee_members (committee_id, user_id, name, email, department, student_id, designation, category, is_override, profile_photo, bio, skills, display_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        req.params.id, user_id || null, memberName, memberEmail || '', memberDept || 'Computer Science & Engineering',
-        memberStudentId || '', designation, finalCategory, manualOverride,
-        memberPhoto || '', memberBio || '', skillsJson, display_order || 10
-      ]
-    );
+    // Target committees can be multiple or single (fallback to req.params.id)
+    const targetIds = (Array.isArray(target_committee_ids) && target_committee_ids.length > 0)
+      ? target_committee_ids
+      : [parseInt(req.params.id, 10)];
 
-    res.status(201).json({ success: true, message: 'Member added to committee', id: result.id, category: finalCategory });
+    const createdIds = [];
+    for (const cId of targetIds) {
+      const result = await runQuery(
+        `INSERT INTO committee_members (committee_id, user_id, name, email, department, student_id, designation, category, is_override, profile_photo, bio, skills, display_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          cId, user_id || null, memberName, memberEmail || '', memberDept || 'Computer Science & Engineering',
+          memberStudentId || '', designation, finalCategory, manualOverride,
+          (memberPhoto && memberPhoto.trim()) ? memberPhoto.trim() : '', memberBio || '', skillsJson, display_order || 10
+        ]
+      );
+      createdIds.push(result.id);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: `Member successfully added to ${createdIds.length} committee session(s)`,
+      ids: createdIds,
+      category: finalCategory
+    });
   } catch (err) {
     console.error('Add committee member error:', err);
     res.status(500).json({ error: 'Failed to add member to committee' });
   }
 });
 
-// PUT /api/admin/committees/members/:memberId: Edit committee member
+// PUT /api/admin/committees/members/:memberId: Edit committee member (including changing committee session)
 router.put('/admin/committees/members/:memberId', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { name, email, department, student_id, designation, category, is_override, profile_photo, bio, skills, display_order } = req.body;
+    const { committee_id, name, email, department, student_id, designation, category, is_override, profile_photo, bio, skills, display_order } = req.body;
 
     let finalCategory = category;
     let manualOverride = is_override;
@@ -1744,7 +1777,8 @@ router.put('/admin/committees/members/:memberId', authenticate, requireAdmin, as
 
     await runQuery(
       `UPDATE committee_members
-       SET name = COALESCE(?, name),
+       SET committee_id = COALESCE(?, committee_id),
+           name = COALESCE(?, name),
            email = COALESCE(?, email),
            department = COALESCE(?, department),
            student_id = COALESCE(?, student_id),
@@ -1756,7 +1790,7 @@ router.put('/admin/committees/members/:memberId', authenticate, requireAdmin, as
            skills = COALESCE(?, skills),
            display_order = COALESCE(?, display_order)
        WHERE id = ?`,
-      [name, email, department, student_id, designation, finalCategory, manualOverride, (profile_photo && profile_photo.trim()) ? profile_photo.trim() : null, bio, skillsJson, display_order, req.params.memberId]
+      [committee_id || null, name, email, department, student_id, designation, finalCategory, manualOverride, (profile_photo && profile_photo.trim()) ? profile_photo.trim() : null, bio, skillsJson, display_order, req.params.memberId]
     );
 
     // Also synchronize profile changes to users table if this member has a linked user account
@@ -1784,6 +1818,72 @@ router.put('/admin/committees/members/:memberId', authenticate, requireAdmin, as
   } catch (err) {
     console.error('Update committee member error:', err);
     res.status(500).json({ error: 'Failed to update committee member' });
+  }
+});
+
+// GET /api/admin/users/:id/committees: Get all committee sessions assigned to a registered user
+router.get('/admin/users/:id/committees', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const user = await getQuery('SELECT * FROM users WHERE id = ?', [req.params.id]);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const assignments = await allQuery(
+      `SELECT cm.id as cm_id, cm.committee_id, c.committee_number, c.title as committee_title,
+              c.session_years, c.is_current, cm.designation, cm.category
+       FROM committee_members cm
+       JOIN committees c ON cm.committee_id = c.id
+       WHERE cm.user_id = ? OR (cm.email IS NOT NULL AND cm.email != '' AND LOWER(cm.email) = LOWER(?))
+       ORDER BY c.committee_number DESC`,
+      [user.id, user.email]
+    );
+
+    res.json({ success: true, data: assignments });
+  } catch (err) {
+    console.error('Get user committee assignments error:', err);
+    res.status(500).json({ error: 'Failed to get committee assignments' });
+  }
+});
+
+// POST /api/admin/users/:id/assign-committees: Assign or update multiple committee sessions for a registered user
+router.post('/admin/users/:id/assign-committees', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const user = await getQuery('SELECT * FROM users WHERE id = ?', [req.params.id]);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const { committee_assignments } = req.body;
+    // committee_assignments should be array of: { committee_id: number, designation?: string, category?: string }
+    if (!Array.isArray(committee_assignments)) {
+      return res.status(400).json({ error: 'committee_assignments must be an array' });
+    }
+
+    // 1. Remove existing committee memberships for this user
+    await runQuery(
+      `DELETE FROM committee_members WHERE user_id = ? OR (email IS NOT NULL AND email != '' AND LOWER(email) = LOWER(?))`,
+      [user.id, user.email]
+    );
+
+    // 2. Insert for each chosen committee
+    for (const a of committee_assignments) {
+      const des = a.designation || user.committee_role || 'Executive Member';
+      const cat = a.category || inferMemberCategory(des);
+      await runQuery(
+        `INSERT INTO committee_members (committee_id, user_id, name, email, department, student_id, designation, category, is_override, profile_photo, bio, skills, display_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, 10)`,
+        [
+          a.committee_id, user.id, user.name, user.email, user.department, user.student_id,
+          des, cat, user.profile_photo || '', user.bio || '', user.skills || '[]'
+        ]
+      );
+    }
+
+    res.json({ success: true, message: `Updated session assignments for ${user.name} across ${committee_assignments.length} committee(s)` });
+  } catch (err) {
+    console.error('Assign user committees error:', err);
+    res.status(500).json({ error: 'Failed to assign committee sessions' });
   }
 });
 

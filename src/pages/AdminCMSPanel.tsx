@@ -87,7 +87,20 @@ export const AdminCMSPanel: React.FC = () => {
   // Committee Member Modals
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
   const [editingCommitteeMember, setEditingCommitteeMember] = useState<any | null>(null);
-  const [newCommitteeMember, setNewCommitteeMember] = useState({
+  const [newCommitteeMember, setNewCommitteeMember] = useState<{
+    user_id: string;
+    name: string;
+    email: string;
+    department: string;
+    student_id: string;
+    designation: string;
+    category: string;
+    bio: string;
+    skills: string;
+    profile_photo: string;
+    display_order: number;
+    target_committee_ids: number[];
+  }>({
     user_id: '',
     name: '',
     email: '',
@@ -98,8 +111,15 @@ export const AdminCMSPanel: React.FC = () => {
     bio: '',
     skills: '',
     profile_photo: '',
-    display_order: 0
+    display_order: 0,
+    target_committee_ids: []
   });
+
+  // User Session Multi-Committee Assignment Modal
+  const [assigningSessionUser, setAssigningSessionUser] = useState<any | null>(null);
+  const [assignedSessionIds, setAssignedSessionIds] = useState<number[]>([]);
+  const [assignedSessionRole, setAssignedSessionRole] = useState<string>('');
+  const [assignedSessionCategory, setAssignedSessionCategory] = useState<string>('Auto');
 
   // Clone past committee
   const [isCloneModalOpen, setIsCloneModalOpen] = useState(false);
@@ -651,19 +671,29 @@ export const AdminCMSPanel: React.FC = () => {
 
   const handleAddCommitteeMember = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedCommitteeId) return;
+    const targetIds = (newCommitteeMember.target_committee_ids && newCommitteeMember.target_committee_ids.length > 0)
+      ? newCommitteeMember.target_committee_ids
+      : (selectedCommitteeId ? [selectedCommitteeId] : []);
+
+    if (targetIds.length === 0) {
+      showToast('error', 'Please select at least one committee session');
+      return;
+    }
+
     try {
-      const res = await fetch(`/api/admin/committees/${selectedCommitteeId}/members`, {
+      const primaryId = targetIds[0];
+      const res = await fetch(`/api/admin/committees/${primaryId}/members`, {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({
           ...newCommitteeMember,
+          target_committee_ids: targetIds,
           is_override: newCommitteeMember.category !== 'Auto' ? 1 : 0
         })
       });
       const data = await res.json();
       if (data.success) {
-        showToast('success', `👤 ${newCommitteeMember.name} added to committee roster!`);
+        showToast('success', `👤 ${newCommitteeMember.name} added to ${targetIds.length} committee session(s)!`);
         setIsAddMemberModalOpen(false);
         setNewCommitteeMember({
           user_id: '',
@@ -676,9 +706,10 @@ export const AdminCMSPanel: React.FC = () => {
           bio: '',
           skills: '',
           profile_photo: '',
-          display_order: 0
+          display_order: 0,
+          target_committee_ids: []
         });
-        fetchCommitteeDetails(selectedCommitteeId);
+        if (selectedCommitteeId) fetchCommitteeDetails(selectedCommitteeId);
         fetchAllAdminData();
       } else {
         showToast('error', data.error || 'Failed to add member');
@@ -690,24 +721,74 @@ export const AdminCMSPanel: React.FC = () => {
 
   const handleUpdateCommitteeMember = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingCommitteeMember || !selectedCommitteeId) return;
+    if (!editingCommitteeMember) return;
     try {
       const res = await fetch(`/api/admin/committees/members/${editingCommitteeMember.id}`, {
         method: 'PUT',
         headers: getHeaders(),
         body: JSON.stringify({
           ...editingCommitteeMember,
+          committee_id: editingCommitteeMember.committee_id,
           is_override: editingCommitteeMember.category !== 'Auto' ? 1 : 0
         })
       });
       const data = await res.json();
       if (data.success) {
-        showToast('success', 'Committee member updated!');
+        showToast('success', 'Committee member updated successfully!');
+        const targetCommId = editingCommitteeMember.committee_id || selectedCommitteeId;
         setEditingCommitteeMember(null);
-        fetchCommitteeDetails(selectedCommitteeId);
+        if (targetCommId) {
+          setSelectedCommitteeId(targetCommId);
+          fetchCommitteeDetails(targetCommId);
+        }
         fetchAllAdminData();
       } else {
         showToast('error', data.error || 'Failed to update committee member');
+      }
+    } catch (err: any) {
+      showToast('error', err.message);
+    }
+  };
+
+  const handleOpenAssignSessionModal = async (u: any) => {
+    setAssigningSessionUser(u);
+    setAssignedSessionRole(u.committee_role || 'Executive Member');
+    setAssignedSessionCategory(u.committee_category || 'Auto');
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}/committees`, { headers: getHeaders() });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        setAssignedSessionIds(data.data.map((a: any) => a.committee_id));
+      } else {
+        setAssignedSessionIds(selectedCommitteeId ? [selectedCommitteeId] : []);
+      }
+    } catch (err) {
+      setAssignedSessionIds(selectedCommitteeId ? [selectedCommitteeId] : []);
+    }
+  };
+
+  const handleSaveUserSessionAssignments = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!assigningSessionUser) return;
+    try {
+      const assignments = assignedSessionIds.map(cId => ({
+        committee_id: cId,
+        designation: assignedSessionRole,
+        category: assignedSessionCategory
+      }));
+      const res = await fetch(`/api/admin/users/${assigningSessionUser.id}/assign-committees`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ committee_assignments: assignments })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('success', `Session assignments updated for ${assigningSessionUser.name}!`);
+        setAssigningSessionUser(null);
+        if (selectedCommitteeId) fetchCommitteeDetails(selectedCommitteeId);
+        fetchAllAdminData();
+      } else {
+        showToast('error', data.error || 'Failed to update session assignments');
       }
     } catch (err: any) {
       showToast('error', err.message);
@@ -2156,7 +2237,8 @@ export const AdminCMSPanel: React.FC = () => {
                               bio: '',
                               skills: '',
                               profile_photo: '',
-                              display_order: (committeeMembers.length + 1)
+                              display_order: (committeeMembers.length + 1),
+                              target_committee_ids: selectedCommitteeId ? [selectedCommitteeId] : []
                             });
                             setIsAddMemberModalOpen(true);
                           }}
@@ -2887,6 +2969,14 @@ export const AdminCMSPanel: React.FC = () => {
                         )}
 
                         <button
+                          onClick={() => handleOpenAssignSessionModal(u)}
+                          className="p-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 transition-colors"
+                          title="Assign to Committee Sessions"
+                        >
+                          <Calendar className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
                           onClick={() => setEditingUser(u)}
                           className="p-1.5 rounded-lg bg-slate-200/70 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors"
                           title="Edit User"
@@ -3006,6 +3096,14 @@ export const AdminCMSPanel: React.FC = () => {
                                 <span>Approve</span>
                               </button>
                             )}
+
+                            <button
+                              onClick={() => handleOpenAssignSessionModal(u)}
+                              className="p-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 transition-colors"
+                              title="Assign to Committee Sessions"
+                            >
+                              <Calendar className="w-3.5 h-3.5" />
+                            </button>
 
                             <button
                               onClick={() => setEditingUser(u)}
@@ -4076,6 +4174,48 @@ export const AdminCMSPanel: React.FC = () => {
                 </div>
               )}
 
+              {/* Committee Session(s) Picker */}
+              <div className="mb-4">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Assign to Committee Session(s) *
+                </label>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2">
+                  Select which committee session(s) this member belongs to. Check multiple sessions to show them across tenures.
+                </p>
+                <div className="space-y-1.5 p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 max-h-36 overflow-y-auto">
+                  {committees.map(c => {
+                    const isChecked = (newCommitteeMember.target_committee_ids || [selectedCommitteeId]).includes(c.id);
+                    return (
+                      <label key={c.id} className="flex items-center gap-2.5 cursor-pointer p-1.5 rounded-xl hover:bg-white dark:hover:bg-slate-800 transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={e => {
+                            const current = newCommitteeMember.target_committee_ids || (selectedCommitteeId ? [selectedCommitteeId] : []);
+                            const next = e.target.checked
+                              ? [...current, c.id]
+                              : current.filter(id => id !== c.id);
+                            setNewCommitteeMember({
+                              ...newCommitteeMember,
+                              target_committee_ids: next.length > 0 ? next : [c.id]
+                            });
+                          }}
+                          className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                        />
+                        <div className="text-xs">
+                          <span className="font-bold text-slate-900 dark:text-white">
+                            Committee #{c.committee_number}: {c.title}
+                          </span>
+                          <span className="ml-1.5 text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
+                            (Session {c.session_years}){c.is_current === 1 ? ' ★ Active' : ''}
+                          </span>
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
               <form onSubmit={handleAddCommitteeMember} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
@@ -4271,6 +4411,26 @@ export const AdminCMSPanel: React.FC = () => {
               </div>
 
               <form onSubmit={handleUpdateCommitteeMember} className="space-y-4">
+                {/* Committee Session Assignment */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Committee Session (Tenure) *
+                  </label>
+                  <select
+                    value={editingCommitteeMember.committee_id || selectedCommitteeId || ''}
+                    onChange={e => setEditingCommitteeMember({ ...editingCommitteeMember, committee_id: Number(e.target.value) })}
+                    className="w-full px-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:border-indigo-500"
+                  >
+                    {committees.map(c => (
+                      <option key={c.id} value={c.id}>
+                        Committee #{c.committee_number}: {c.title} (Session {c.session_years}){c.is_current === 1 ? ' ★ Active' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Change this dropdown to move this member into a different committee session tenure.
+                  </p>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Full Name *</label>
@@ -4500,6 +4660,138 @@ export const AdminCMSPanel: React.FC = () => {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* 6. Assign Member to Committee Sessions Modal */}
+        {assigningSessionUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-[#0D1424] border border-slate-200 dark:border-slate-700 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl">
+              <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-5">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={assigningSessionUser.profile_photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${assigningSessionUser.name}`}
+                    alt={assigningSessionUser.name}
+                    className="w-10 h-10 rounded-full object-cover border-2 border-indigo-500/40"
+                  />
+                  <div>
+                    <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+                      Assign Committee Sessions
+                    </h3>
+                    <p className="text-xs text-slate-500">{assigningSessionUser.name} ({assigningSessionUser.email})</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setAssigningSessionUser(null)}
+                  className="p-1 rounded text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveUserSessionAssignments} className="space-y-4">
+                <p className="text-xs text-slate-600 dark:text-slate-300">
+                  Select which committee session(s) this member holds. If they hold multiple sessions, check each session and they will appear in all chosen committees!
+                </p>
+
+                {/* Session Checkboxes */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
+                    Active Sessions for {assigningSessionUser.name}:
+                  </label>
+                  <div className="space-y-2 p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 max-h-48 overflow-y-auto">
+                    {committees.map(c => {
+                      const isChecked = assignedSessionIds.includes(c.id);
+                      return (
+                        <label
+                          key={c.id}
+                          className={`flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-all border ${
+                            isChecked
+                              ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-700'
+                              : 'bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={e => {
+                              if (e.target.checked) {
+                                setAssignedSessionIds([...assignedSessionIds, c.id]);
+                              } else {
+                                setAssignedSessionIds(assignedSessionIds.filter(id => id !== c.id));
+                              }
+                            }}
+                            className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                          />
+                          <div className="flex-1 text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-900 dark:text-white">
+                                Committee #{c.committee_number}: {c.title}
+                              </span>
+                              <span className="px-2 py-0.2 rounded-md text-[10px] font-bold bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300">
+                                {c.session_years}
+                              </span>
+                              {c.is_current === 1 && (
+                                <span className="text-[10px] text-emerald-600 font-bold">★ Active</span>
+                              )}
+                            </div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Role / Designation */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Role / Designation
+                    </label>
+                    <input
+                      type="text"
+                      value={assignedSessionRole}
+                      onChange={e => setAssignedSessionRole(e.target.value)}
+                      placeholder="e.g. Director, President, Member"
+                      className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                      Category
+                    </label>
+                    <select
+                      value={assignedSessionCategory}
+                      onChange={e => setAssignedSessionCategory(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold focus:outline-none focus:border-indigo-500"
+                    >
+                      <option value="Auto">Auto (Smart)</option>
+                      <option value="Executive">Executive</option>
+                      <option value="Lead">Lead</option>
+                      <option value="Advisor">Advisor</option>
+                      <option value="Member">Member</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5 pt-4 border-t border-slate-200 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setAssigningSessionUser(null)}
+                    className="px-4 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Save Session Assignments</span>
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

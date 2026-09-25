@@ -150,9 +150,9 @@ async function initDatabase() {
     `);
 
     // Safe Column Migrations for Project Proposals
-    db.run(`ALTER TABLE projects ADD COLUMN approval_status TEXT DEFAULT 'approved'`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN submitted_by_id INTEGER`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN submitted_by_name TEXT`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN approval_status TEXT DEFAULT 'approved'`, () => { });
+    db.run(`ALTER TABLE projects ADD COLUMN submitted_by_id INTEGER`, () => { });
+    db.run(`ALTER TABLE projects ADD COLUMN submitted_by_name TEXT`, () => { });
 
     // 8. Committees Table (Annual / Tenure Committees with Committee Numbers)
     db.run(`
@@ -192,8 +192,8 @@ async function initDatabase() {
     `);
 
     // Safe Column Migrations for users table (Committee linkage & category override)
-    db.run(`ALTER TABLE users ADD COLUMN committee_category TEXT DEFAULT 'Auto'`, () => {});
-    db.run(`ALTER TABLE users ADD COLUMN committee_id INTEGER DEFAULT 1`, () => {});
+    db.run(`ALTER TABLE users ADD COLUMN committee_category TEXT DEFAULT 'Auto'`, () => { });
+    db.run(`ALTER TABLE users ADD COLUMN committee_id INTEGER DEFAULT 1`, () => { });
 
     await seedInitialData();
     await ensureMasterAdmin();
@@ -844,11 +844,43 @@ async function ensureRegisteredMembers() {
         designation: 'Secretary',
         category: 'Executive',
         display_order: 3
+      },
+      {
+        name: 'Md. Khabir Uddin Ahamed',
+        email: 'khabir.cse@jstu.ac.bd',
+        role: 'Member',
+        status: 'approved',
+        committee_role: 'Executive Member',
+        department: 'CSE',
+        student_id: 'JSTU-CSE-12',
+        bio: 'Robotics & Automation Enthusiast | Active Member of JSTU Robotics Club. Passionate about embedded systems, microcontroller firmware, and hardware prototyping.',
+        skills: JSON.stringify(['Arduino', 'C++', 'Python', 'Embedded Systems', 'Robotics', 'Circuit Design']),
+        profile_photo: 'https://api.dicebear.com/7.x/bottts/svg?seed=Md.%20Khabir%20Uddin%20Ahamed',
+        contact_links: JSON.stringify({ email: 'khabiruddin.jstu@gmail.com' }),
+        designation: 'Executive Member',
+        category: 'Member',
+        display_order: 5
+      },
+      {
+        name: 'Nandita Saha Nishi',
+        email: 'nandita99saha@gmail.com',
+        role: 'Member',
+        status: 'approved',
+        committee_role: 'Executive Member',
+        department: 'Electrical & Electronic Engineering',
+        student_id: 'JSTU-EEE-22211231',
+        bio: 'Passionate about gathering knowledge in robotics, artificial intelligence, and embedded systems.',
+        skills: JSON.stringify(['Arduino', 'Python', 'ML', 'DL', 'AutoCAD', 'MATLAB']),
+        profile_photo: 'https://api.dicebear.com/7.x/bottts/svg?seed=Nandita%20Saha%20Nishi%20',
+        contact_links: JSON.stringify({ email: 'nandita99saha@gmail.com' }),
+        designation: 'Executive Member',
+        category: 'Member',
+        display_order: 6
       }
     ];
 
     for (const m of membersToPreserve) {
-      let user = await getQuery('SELECT id FROM users WHERE LOWER(email) = LOWER(?)', [m.email]);
+      let user = await getQuery('SELECT id FROM users WHERE LOWER(email) = LOWER(?) OR LOWER(name) = LOWER(?) OR (LOWER(name) LIKE \'%khabir%\' AND ? LIKE \'%khabir%\')', [m.email, m.name, m.name]);
       if (!user) {
         const res = await runQuery(
           `INSERT INTO users (name, email, password_hash, role, status, committee_role, department, student_id, bio, skills, profile_photo, contact_links, project_contributions)
@@ -858,7 +890,7 @@ async function ensureRegisteredMembers() {
         user = { id: res.id };
       }
 
-      const cm = await getQuery('SELECT id FROM committee_members WHERE committee_id = ? AND (LOWER(email) = LOWER(?) OR LOWER(name) = LOWER(?))', [c2.id, m.email, m.name]);
+      const cm = await getQuery('SELECT id FROM committee_members WHERE committee_id = ? AND (LOWER(email) = LOWER(?) OR LOWER(name) = LOWER(?) OR (LOWER(name) LIKE \'%khabir%\' AND ? LIKE \'%khabir%\'))', [c2.id, m.email, m.name, m.name]);
       if (!cm) {
         await runQuery(
           `INSERT INTO committee_members (committee_id, user_id, name, email, department, student_id, designation, category, is_override, profile_photo, bio, skills, display_order)
