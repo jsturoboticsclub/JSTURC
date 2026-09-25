@@ -196,6 +196,7 @@ async function initDatabase() {
     db.run(`ALTER TABLE users ADD COLUMN committee_id INTEGER DEFAULT 1`, () => {});
 
     await seedInitialData();
+    await ensureMasterAdmin();
   });
 }
 
@@ -719,6 +720,49 @@ async function seedInitialData() {
     }
   } catch (err) {
     console.error('❌ Error during initial data seeding:', err);
+  }
+}
+
+// Ensure Master Admin account exists with user-specified credentials and purge legacy demo accounts
+async function ensureMasterAdmin() {
+  try {
+    const adminEmail = 'jsturoboticsclub@gmail.com';
+    const adminPassPlain = '@@2017JSTURC2017@@';
+    const salt = await bcrypt.genSalt(10);
+    const newHash = await bcrypt.hash(adminPassPlain, salt);
+
+    const existingAdmin = await getQuery('SELECT id FROM users WHERE LOWER(email) = LOWER(?)', [adminEmail]);
+    if (!existingAdmin) {
+      await runQuery(
+        `INSERT INTO users (
+          email, password_hash, name, role, status, committee_role, department,
+          bio, skills, profile_photo, contact_links, project_contributions
+        ) VALUES (
+          ?, ?, 'JSTU Robotics Club Admin', 'Admin', 'approved', 'Chief Administrator', 'Robotics & Automation',
+          'Official Administrator of the Jamalpur Science and Technology University Robotics Club.',
+          ?, 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+          ?, ?
+        )`,
+        [
+          adminEmail,
+          newHash,
+          JSON.stringify(['Administration', 'Robotics Systems', 'Leadership']),
+          JSON.stringify({ email: adminEmail }),
+          JSON.stringify(['Club Administration'])
+        ]
+      );
+      console.log(`🔐 Master Admin account created: ${adminEmail}`);
+    } else {
+      await runQuery('UPDATE users SET password_hash = ?, role = "Admin", status = "approved" WHERE LOWER(email) = LOWER(?)', [newHash, adminEmail]);
+      console.log(`🔐 Master Admin credentials updated: ${adminEmail}`);
+    }
+
+    // Permanently remove legacy demo accounts so no one can manipulate
+    await runQuery('DELETE FROM users WHERE LOWER(email) IN ("admin@jstu.edu", "member@jstu.edu")');
+    await runQuery('DELETE FROM committee_members WHERE LOWER(email) IN ("admin@jstu.edu", "member@jstu.edu")');
+    console.log('🧹 Purged legacy demo accounts (admin@jstu.edu, member@jstu.edu)');
+  } catch (err) {
+    console.error('❌ Error ensuring master admin:', err);
   }
 }
 

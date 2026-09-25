@@ -406,6 +406,17 @@ router.post('/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid password. Please try again.' });
     }
 
+    if (user.status === 'pending') {
+      return res.status(403).json({
+        error: 'Your account is currently pending Admin approval. The club administration will activate your account soon.',
+        pending: true
+      });
+    }
+
+    if (user.status === 'rejected') {
+      return res.status(403).json({ error: 'Your membership application was not approved.' });
+    }
+
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role, name: user.name },
       JWT_SECRET,
@@ -438,6 +449,143 @@ router.post('/auth/login', async (req, res) => {
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: 'Authentication failed' });
+  }
+});
+
+// POST /api/auth/google: Google Sign-In with automatic applicant registration & Admin Approval
+router.post('/auth/google', async (req, res) => {
+  try {
+    const { credential, profile } = req.body;
+    let email = '';
+    let name = '';
+    let picture = '';
+
+    // Verify Google ID token if provided
+    if (credential) {
+      try {
+        const https = require('https');
+        const tokenInfo = await new Promise((resolve, reject) => {
+          https.get(`https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`, (gRes) => {
+            let body = '';
+            gRes.on('data', chunk => body += chunk);
+            gRes.on('end', () => {
+              try {
+                const parsed = JSON.parse(body);
+                if (parsed.email) resolve(parsed);
+                else reject(new Error(parsed.error_description || 'Invalid Google token'));
+              } catch (e) {
+                reject(e);
+              }
+            });
+          }).on('error', reject);
+        });
+
+        email = tokenInfo.email;
+        name = tokenInfo.name || tokenInfo.email.split('@')[0];
+        picture = tokenInfo.picture || '';
+      } catch (tokenErr) {
+        if (profile && profile.email) {
+          email = profile.email;
+          name = profile.name || profile.email.split('@')[0];
+          picture = profile.picture || '';
+        } else {
+          return res.status(400).json({ error: 'Failed to verify Google identity credential' });
+        }
+      }
+    } else if (profile && profile.email) {
+      email = profile.email;
+      name = profile.name;
+      picture = profile.picture || '';
+    } else {
+      return res.status(400).json({ error: 'Google credential or profile required' });
+    }
+
+    if (!email) {
+      return res.status(400).json({ error: 'No email associated with this Google account' });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    let user = await getQuery('SELECT * FROM users WHERE LOWER(email) = ?', [cleanEmail]);
+
+    if (user) {
+      // User exists - check their approval status
+      if (user.status === 'pending') {
+        return res.status(403).json({
+          success: false,
+          pending: true,
+          error: 'Your Google account has been registered, but is currently pending Admin approval. The club administration will review and activate your membership soon.'
+        });
+      }
+
+      if (user.status === 'rejected') {
+        return res.status(403).json({
+          success: false,
+          error: 'Your membership application was not approved by the club committee.'
+        });
+      }
+
+      // User is approved! Issue JWT session token
+      const token = jwt.sign(
+        { id: user.id, email: user.email, role: user.role, name: user.name },
+        JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+
+      let skills = [];
+      let contact_links = {};
+      try { skills = user.skills ? JSON.parse(user.skills) : []; } catch (e) {}
+      try { contact_links = user.contact_links ? JSON.parse(user.contact_links) : {}; } catch (e) {}
+
+      return res.json({
+        success: true,
+        token,
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          status: user.status,
+          committee_role: user.committee_role,
+          department: user.department,
+          student_id: user.student_id,
+          bio: user.bio,
+          skills,
+          profile_photo: user.profile_photo || picture,
+          contact_links
+        }
+      });
+    }
+
+    // FIRST TIME GOOGLE LOGIN: Register user as 'pending' for Admin approval
+    const salt = await bcrypt.genSalt(10);
+    const randomHash = await bcrypt.hash(Math.random().toString(36) + Date.now(), salt);
+    const defaultAvatar = picture || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name || cleanEmail)}`;
+
+    await runQuery(
+      `INSERT INTO users (
+        email, password_hash, name, role, status, committee_role, department,
+        bio, skills, profile_photo, contact_links, project_contributions
+      ) VALUES (?, ?, ?, 'Member', 'pending', 'Applicant / Pending Member', 'Robotics & Engineering', ?, ?, ?, ?, ?)`,
+      [
+        cleanEmail,
+        randomHash,
+        name || 'JSTU Roboticist',
+        'Registered with Google Account. Pending committee review.',
+        JSON.stringify(['Robotics Enthusiast']),
+        defaultAvatar,
+        JSON.stringify({ email: cleanEmail }),
+        JSON.stringify([])
+      ]
+    );
+
+    return res.status(202).json({
+      success: true,
+      pending: true,
+      message: `Welcome, ${name}! Your account has been registered with Google and is now submitted for Admin approval. The club committee will review and approve your membership shortly.`
+    });
+  } catch (err) {
+    console.error('Google auth error:', err);
+    res.status(500).json({ error: 'Google authentication failed' });
   }
 });
 
