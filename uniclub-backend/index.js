@@ -15,24 +15,62 @@ const authenticateToken = require('./middleware/auth');
 
 const app = express();
 
-// 1. HTTP Security Headers (Protects against XSS, clickjacking, MIME sniffing, hides X-Powered-By)
+// Trust reverse proxies (Render load balancers, Vercel edge routers, Cloudflare)
+app.set('trust proxy', 1);
+
+// 1. CORS Configuration (MUST be the very first middleware so errors/rate-limits always receive CORS headers)
+app.use(cors({
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      'http://localhost:8080', 'http://127.0.0.1:8080', 'http://192.168.1.191:8080',
+      'http://localhost:8081', 'http://127.0.0.1:8081', 'http://192.168.1.191:8081',
+      'http://localhost:8082', 'http://127.0.0.1:8082', 'http://192.168.1.191:8082',
+      'http://localhost:5173', 'http://localhost:3000'
+    ];
+    
+    // Always allow requests without origin (cURL, server-to-server proxies, mobile apps)
+    if (!origin) return callback(null, true);
+    
+    // Allow local development, all Vercel domains, Render domains, and custom FRONTEND_URL
+    const isVercelDomain = origin.includes('vercel.app') || origin.includes('render.com');
+    const isFrontendUrl = process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL;
+    
+    if (allowedOrigins.includes(origin) || isVercelDomain || isFrontendUrl || process.env.NODE_ENV === 'production') {
+      callback(null, true);
+    } else {
+      callback(null, true); // Permissive fallback to prevent any CORS block for client requests
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+}));
+
+// Handle preflight explicitly for all routes
+app.options('*', cors());
+
+// 2. HTTP Security Headers
 app.use(helmet({
-  contentSecurityPolicy: false, // Allows CDN images (unsplash, dicebear) and fonts
+  contentSecurityPolicy: false, // Allows CDN images (unsplash, dicebear, Google avatars) and fonts
   crossOriginEmbedderPolicy: false,
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
-// 2. High-Speed Gzip/Deflate Response Compression (Reduces payload size by ~75% for instant page loads)
+// 3. High-Speed Gzip/Deflate Response Compression
 app.use(compression({
   threshold: 1024 // Compress any response > 1KB
 }));
 
-// 3. API Abuse Protection & Rate Limiting
+// 4. API Abuse Protection & Rate Limiting
 const globalApiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 300, // Limit each IP to 300 requests per 15 minutes
+  max: 5000, // Generous threshold for normal browsing
   standardHeaders: true,
   legacyHeaders: false,
+  // Never rate-limit public read operations or health probes
+  skip: (req) => req.method === 'GET' || req.method === 'OPTIONS' || req.path === '/api/health' || req.path === '/health',
   message: {
     success: false,
     error: 'Too many requests from this IP. Please slow down and try again later.'
@@ -41,7 +79,7 @@ const globalApiLimiter = rateLimit({
 
 const strictAuthLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 12, // Max 12 login / password attempts per 15 min to prevent brute force & credential stuffing
+  max: 25, // 25 attempts per 15 min to prevent brute force & credential stuffing
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -52,7 +90,7 @@ const strictAuthLimiter = rateLimit({
 
 const submissionLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -76,12 +114,10 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Serve uploads as static files
 app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
-// Specifically serve avatar files (ensure avatars subdirectory is accessible)
 app.use('/uploads/avatars', express.static(path.join(__dirname, 'public', 'uploads', 'avatars')));
 
 // Log only important requests (disable body logging for performance)
 app.use((req, res, next) => {
-  // Only log in development, and skip body to improve performance
   if (process.env.NODE_ENV === 'development' && !req.url.includes('/api/')) {
     console.log(`[REQUEST] ${req.method} ${req.url}`);
   }
@@ -89,32 +125,6 @@ app.use((req, res, next) => {
 });
 
 const PORT = process.env.PORT || 5000;
-
-// CORS configuration with Vercel support
-app.use(cors({
-  origin: function (origin, callback) {
-    const allowedOrigins = [
-      'http://localhost:8080', 'http://127.0.0.1:8080', 'http://192.168.1.191:8080',
-      'http://localhost:8081', 'http://127.0.0.1:8081', 'http://192.168.1.191:8081',
-      'http://localhost:8082', 'http://127.0.0.1:8082', 'http://192.168.1.191:8082'
-    ];
-    
-    // Allow local development, all Vercel domains, and optional custom FRONTEND_URL
-    const isVercelDomain = origin && (origin.includes('vercel.app') || origin.includes('render.com'));
-    const isFrontendUrl = process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL;
-    
-    if (!origin || allowedOrigins.includes(origin) || isVercelDomain || isFrontendUrl || process.env.NODE_ENV === 'production') {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  preflightContinue: false,
-  optionsSuccessStatus: 204
-}));
 
 // JSTU Robotics Club Relational Database & Routes
 const jstuRoutes = require('./routes/jstuRoutes');
