@@ -48,8 +48,8 @@ app.use(cors({
   optionsSuccessStatus: 204
 }));
 
-// Handle preflight explicitly for all routes
-app.options('*', cors());
+// Handle preflight explicitly for all routes (Express 5 wildcard syntax)
+app.options('/{*path}', cors());
 
 // 2. HTTP Security Headers
 app.use(helmet({
@@ -508,7 +508,7 @@ app.use((req, res, next) => {
 const distPath = path.join(__dirname, '../dist');
 if (fs.existsSync(distPath)) {
   app.use(express.static(distPath));
-  app.get('*', (req, res, next) => {
+  app.get('/{*path}', (req, res, next) => {
     if (req.path.startsWith('/api')) return next();
     res.sendFile(path.join(distPath, 'index.html'));
   });
