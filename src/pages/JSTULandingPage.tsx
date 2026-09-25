@@ -1391,9 +1391,11 @@ export const JSTULandingPage: React.FC = () => {
       <footer className="py-10 sm:py-12 bg-white dark:bg-[#05080E] border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex flex-col sm:flex-row items-center gap-3 text-center sm:text-left">
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950 flex items-center justify-center border border-indigo-200 dark:border-indigo-800 flex-shrink-0">
-              <Cpu className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-            </div>
+            <img
+              src="/logo.jpg"
+              alt="JSTU Robotics Club Logo"
+              className="w-9 h-9 rounded-xl object-cover border border-indigo-200 dark:border-indigo-800 flex-shrink-0 bg-white shadow-xs"
+            />
             <div>
               <span className="font-bold text-slate-900 dark:text-white block text-sm sm:text-xs">
                 {superConfig.footer?.title || 'Jamalpur Science and Technology University Robotics Club'}

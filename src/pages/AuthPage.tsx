@@ -306,11 +306,11 @@ export const AuthPage: React.FC = () => {
 
           {/* Logo / Title */}
           <div className="text-center mb-6">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-amber-500 p-0.5 shadow-md shadow-indigo-500/25 mx-auto mb-3">
-              <div className="w-full h-full bg-white dark:bg-[#0B1120] rounded-[14px] flex items-center justify-center">
-                <Cpu className="w-6 h-6 sm:w-7 sm:h-7 text-indigo-600 dark:text-indigo-400" />
-              </div>
-            </div>
+            <img
+              src="/logo.jpg"
+              alt="JSTU Robotics Club Logo"
+              className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover shadow-lg shadow-indigo-500/25 mx-auto mb-3 border-2 border-indigo-500/40 bg-white"
+            />
             <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">JSTU Robotics Portal</h2>
             <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">Jamalpur Science & Technology University</p>
           </div>

@@ -24,10 +24,10 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const [siteBranding, setSiteBranding] = useState(branding || {
-    title: 'JSTU Robotics',
-    badge: 'Club',
+    title: 'JSTU Robotics Club',
+    badge: 'BOTS & BEYOND',
     subtitle: 'Jamalpur Science & Technology University',
-    image_url: ''
+    image_url: '/logo.jpg'
   });
 
   useEffect(() => {
@@ -129,19 +129,14 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
           
           {/* Brand Logo & Name (Admin Configurable) */}
           <Link to="/" className="flex items-center gap-2 sm:gap-3 group min-w-0 pr-1 lg:pr-2 flex-shrink-0">
-            {siteBranding.image_url ? (
-              <img
-                src={siteBranding.image_url}
-                alt="Website Logo"
-                className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl object-cover shadow-sm shadow-indigo-500/20 group-hover:scale-105 transition-all duration-300 border border-slate-200 dark:border-slate-700 flex-shrink-0"
-              />
-            ) : (
-              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-amber-500 p-0.5 shadow-sm shadow-indigo-500/20 group-hover:shadow-indigo-500/40 group-hover:scale-105 transition-all duration-300 flex-shrink-0">
-                <div className="w-full h-full bg-white dark:bg-[#0D1424] rounded-[9px] sm:rounded-[13px] flex items-center justify-center">
-                  <Cpu className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 dark:text-indigo-400 group-hover:rotate-12 transition-transform duration-300" />
-                </div>
-              </div>
-            )}
+            <img
+              src={siteBranding.image_url || '/logo.jpg'}
+              alt="JSTU Robotics Club Official Logo"
+              className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl object-cover shadow-sm shadow-indigo-500/20 group-hover:scale-105 transition-all duration-300 border-2 border-indigo-500/40 dark:border-indigo-400/30 flex-shrink-0 bg-white"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = '/logo.jpg';
+              }}
+            />
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <span className="font-black text-sm sm:text-base xl:text-lg tracking-tight text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors whitespace-nowrap">
