@@ -71,9 +71,14 @@ export const AuthPage: React.FC = () => {
     }
   };
 
-  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  const rawClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  const isSecret = rawClientId && rawClientId.startsWith('GOCSPX');
+  const googleClientId = (rawClientId && rawClientId.includes('.apps.googleusercontent.com')) ? rawClientId.trim() : null;
 
   React.useEffect(() => {
+    if (isSecret) {
+      console.warn('⚠️ [Google OAuth]: VITE_GOOGLE_CLIENT_ID contains a Client Secret (starts with GOCSPX-). Please copy the Client ID that ends with .apps.googleusercontent.com from Google Cloud Console.');
+    }
     if (!googleClientId) return;
     const script = document.createElement('script');
     script.src = 'https://accounts.google.com/gsi/client';
