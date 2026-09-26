@@ -6,6 +6,8 @@ import {
   CheckCircle2, Clock, Cpu, Filter, Eye
 } from 'lucide-react';
 import JSTUHeader from '../components/JSTUHeader';
+import ScrollReveal from '../components/ScrollReveal';
+import { SkeletonHero } from '../components/SkeletonLoader';
 
 interface CommitteeItem {
   id: number;
@@ -160,6 +162,15 @@ export const CommitteesPage: React.FC = () => {
     return (m.category || 'Member') === selectedCategory;
   });
 
+  if (loading && committees.length === 0) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-[#070B14] text-slate-900 dark:text-slate-100 transition-colors duration-300">
+        <JSTUHeader currentUser={currentUser} />
+        <SkeletonHero />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#070B14] text-slate-900 dark:text-slate-100 transition-colors duration-300 selection:bg-indigo-500 selection:text-white">
       {/* Navigation Header */}
@@ -170,31 +181,33 @@ export const CommitteesPage: React.FC = () => {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[300px] bg-gradient-to-r from-indigo-500/10 via-purple-500/15 to-amber-500/10 blur-[120px] rounded-full pointer-events-none" />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="flex flex-col items-center text-center max-w-3xl mx-auto">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/60 text-indigo-700 dark:text-indigo-300 text-xs font-black mb-4 shadow-xs">
-              <Award className="w-3.5 h-3.5 text-amber-500" />
-              <span>LEADERSHIP ARCHIVE & TENURE REGISTRY</span>
-            </div>
-
-            <h1 className="text-3xl sm:text-5xl font-black text-slate-900 dark:text-white tracking-tight mb-4">
-              Committees & Executive Councils
-            </h1>
-            <p className="text-sm sm:text-base text-slate-600 dark:text-slate-400 leading-relaxed max-w-2xl font-normal">
-              Every academic year, the JSTU Robotics Club passes leadership to an elected executive council, engineering leads, and faculty mentors. Explore past and present committee tenures below.
-            </p>
-
-            {currentUser?.role === 'Admin' && (
-              <div className="mt-6 flex flex-wrap items-center gap-3">
-                <Link
-                  to="/admin?tab=committees"
-                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow-md hover:scale-105 active:scale-95 transition-all"
-                >
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>👑 Admin: Manage & Create Committees</span>
-                </Link>
+          <ScrollReveal animation="fade-up">
+            <div className="flex flex-col items-center text-center max-w-3xl mx-auto">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/60 text-indigo-700 dark:text-indigo-300 text-xs font-black mb-4 shadow-xs">
+                <Award className="w-3.5 h-3.5 text-amber-500" />
+                <span>LEADERSHIP ARCHIVE & TENURE REGISTRY</span>
               </div>
-            )}
-          </div>
+
+              <h1 className="text-3xl sm:text-5xl font-black text-slate-900 dark:text-white tracking-tight mb-4">
+                Committees & Executive Councils
+              </h1>
+              <p className="text-sm sm:text-base text-slate-600 dark:text-slate-400 leading-relaxed max-w-2xl font-normal">
+                Every academic year, the JSTU Robotics Club passes leadership to an elected executive council, engineering leads, and faculty mentors. Explore past and present committee tenures below.
+              </p>
+
+              {currentUser?.role === 'Admin' && (
+                <div className="mt-6 flex flex-wrap items-center gap-3">
+                  <Link
+                    to="/admin?tab=committees"
+                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-slate-950 text-xs font-black flex items-center gap-1.5 shadow-md hover:scale-105 active:scale-95 transition-all"
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>👑 Admin: Manage & Create Committees</span>
+                  </Link>
+                </div>
+              )}
+            </div>
+          </ScrollReveal>
         </div>
       </section>
 
@@ -203,74 +216,77 @@ export const CommitteesPage: React.FC = () => {
         
         {/* Committee Tenures Grid / Selector */}
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                <span>Select Committee Tenure</span>
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Click any committee number below to inspect its leadership body and members
-              </p>
+          <ScrollReveal animation="fade-up">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                  <span>Select Committee Tenure</span>
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Click any committee number below to inspect its leadership body and members
+                </p>
+              </div>
+              <span className="text-xs font-mono font-bold text-slate-400">
+                {committees.length} Tenures Recorded
+              </span>
             </div>
-            <span className="text-xs font-mono font-bold text-slate-400">
-              {committees.length} Tenures Recorded
-            </span>
-          </div>
+          </ScrollReveal>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {committees.map((c) => {
+            {committees.map((c, idx: number) => {
               const isSelected = selectedCommitteeId === c.id;
               return (
-                <button
-                  key={c.id}
-                  onClick={() => handleSelectCommittee(c)}
-                  className={`text-left p-5 rounded-2xl border transition-all duration-200 relative group flex flex-col justify-between ${
-                    isSelected
-                      ? 'bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/50 dark:to-purple-950/30 border-indigo-500 ring-2 ring-indigo-500/20 shadow-lg'
-                      : 'bg-white dark:bg-[#0D1424] border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-slate-700 shadow-xs'
-                  }`}
-                >
-                  <div>
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <span className="px-2.5 py-1 rounded-lg text-xs font-mono font-black bg-indigo-600 text-white">
-                        Committee #{c.committee_number}
-                      </span>
-                      {c.is_current === 1 ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 animate-pulse">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                          <span>Active Tenure</span>
+                <ScrollReveal key={c.id} animation="fade-up" delay={idx * 0.05} className="h-full">
+                  <button
+                    onClick={() => handleSelectCommittee(c)}
+                    className={`text-left p-5 rounded-2xl border transition-all duration-200 relative group flex flex-col justify-between w-full h-full premium-card ${
+                      isSelected
+                        ? 'bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/50 dark:to-purple-950/30 border-indigo-500 ring-2 ring-indigo-500/20 shadow-lg'
+                        : 'bg-white dark:bg-[#0D1424] border-slate-200 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-slate-700 shadow-xs'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className="px-2.5 py-1 rounded-lg text-xs font-mono font-black bg-indigo-600 text-white">
+                          Committee #{c.committee_number}
                         </span>
-                      ) : (
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800">
-                          Archived Tenure
-                        </span>
+                        {c.is_current === 1 ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 animate-pulse">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            <span>Active Tenure</span>
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800">
+                            Archived Tenure
+                          </span>
+                        )}
+                      </div>
+
+                      <h3 className="text-base font-black text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                        {c.title}
+                      </h3>
+                      <p className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400 mb-2">
+                        Session: {c.session_years}
+                      </p>
+
+                      {c.theme_motto && (
+                        <p className="text-xs text-slate-600 dark:text-slate-300 italic line-clamp-2 mb-3">
+                          "{c.theme_motto}"
+                        </p>
                       )}
                     </div>
 
-                    <h3 className="text-base font-black text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                      {c.title}
-                    </h3>
-                    <p className="text-xs font-mono font-bold text-indigo-600 dark:text-indigo-400 mb-2">
-                      Session: {c.session_years}
-                    </p>
-
-                    {c.theme_motto && (
-                      <p className="text-xs text-slate-600 dark:text-slate-300 italic line-clamp-2 mb-3">
-                        "{c.theme_motto}"
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="pt-3 border-t border-slate-200/70 dark:border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
-                    <span>👥 {c.total_members_count || 0} Members</span>
-                    {c.president_name && (
-                      <span className="font-bold truncate max-w-[140px] text-slate-700 dark:text-slate-300">
-                        Pres: {c.president_name}
-                      </span>
-                    )}
-                  </div>
-                </button>
+                    <div className="pt-3 border-t border-slate-200/70 dark:border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                      <span>👥 {c.total_members_count || 0} Members</span>
+                      {c.president_name && (
+                        <span className="font-bold truncate max-w-[140px] text-slate-700 dark:text-slate-300">
+                          Pres: {c.president_name}
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                </ScrollReveal>
               );
             })}
           </div>
@@ -371,7 +387,7 @@ export const CommitteesPage: React.FC = () => {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {filteredMembers.map(m => {
+                {filteredMembers.map((m, idx: number) => {
                   let categoryBadge = {
                     text: 'Core Member',
                     style: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
@@ -394,77 +410,78 @@ export const CommitteesPage: React.FC = () => {
                   }
 
                   return (
-                    <div
-                      key={m.id}
-                      className="p-5 rounded-3xl bg-slate-50/70 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 hover:border-indigo-500 hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-300 flex flex-col justify-between group"
-                    >
-                      <div>
-                        {/* Member Header with Photo & Badge */}
-                        <div className="flex items-start gap-3.5 mb-3.5">
-                          <img
-                            src={m.profile_photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(m.name)}`}
-                            alt={m.name}
-                            className="w-14 h-14 rounded-2xl object-cover border-2 border-indigo-500/20 group-hover:border-indigo-500 transition-colors shadow-sm"
-                            onError={(e) => {
-                              e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(m.name)}`;
-                            }}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border mb-1.5 ${categoryBadge.style}`}>
-                              {categoryBadge.text}
-                            </span>
-                            <h4 className="text-base font-bold text-slate-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                              {m.name}
-                            </h4>
-                            <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400 leading-tight">
-                              {m.designation}
-                            </p>
+                    <ScrollReveal key={m.id} animation="fade-up" delay={Math.min(idx * 0.04, 0.35)} className="h-full">
+                      <div
+                        className="p-5 rounded-3xl bg-slate-50/70 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80 hover:border-indigo-500 hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-300 flex flex-col justify-between group premium-card h-full"
+                      >
+                        <div>
+                          {/* Member Header with Photo & Badge */}
+                          <div className="flex items-start gap-3.5 mb-3.5">
+                            <img
+                              src={m.profile_photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(m.name)}`}
+                              alt={m.name}
+                              className="w-14 h-14 rounded-2xl object-cover border-2 border-indigo-500/20 group-hover:border-indigo-500 transition-colors shadow-sm"
+                              onError={(e) => {
+                                e.currentTarget.src = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(m.name)}`;
+                              }}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border mb-1.5 ${categoryBadge.style}`}>
+                                {categoryBadge.text}
+                              </span>
+                              <h4 className="text-base font-bold text-slate-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                                {m.name}
+                              </h4>
+                              <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400 leading-tight">
+                                {m.designation}
+                              </p>
+                            </div>
                           </div>
+
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2 truncate">
+                            {m.department || 'Jamalpur Science and Technology University'}
+                          </p>
+
+                          <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-3 mb-4 leading-relaxed font-normal">
+                            {m.bio || 'Active researcher and engineer advancing autonomous robotics systems at JSTU.'}
+                          </p>
+
+                          {/* Skills */}
+                          {m.skills && m.skills.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mb-4">
+                              {m.skills.slice(0, 3).map((s, i) => (
+                                <span
+                                  key={i}
+                                  className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 border border-slate-200 dark:border-slate-700"
+                                >
+                                  {s}
+                                </span>
+                              ))}
+                              {m.skills.length > 3 && (
+                                <span className="text-[10px] font-mono text-slate-400 self-center">
+                                  +{m.skills.length - 3}
+                                </span>
+                              )}
+                            </div>
+                          )}
                         </div>
 
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2 truncate">
-                          {m.department || 'Jamalpur Science and Technology University'}
-                        </p>
+                        {/* Footer Details */}
+                        <div className="pt-3 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-between text-xs">
+                          <span className="text-[11px] font-mono text-slate-500">
+                            {m.student_id ? `ID: ${m.student_id}` : `Tenure: #${committeeDetails.committee_number}`}
+                          </span>
 
-                        <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-3 mb-4 leading-relaxed font-normal">
-                          {m.bio || 'Active researcher and engineer advancing autonomous robotics systems at JSTU.'}
-                        </p>
-
-                        {/* Skills */}
-                        {m.skills && m.skills.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mb-4">
-                            {m.skills.slice(0, 3).map((s, idx) => (
-                              <span
-                                key={idx}
-                                className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-300 border border-slate-200 dark:border-slate-700"
-                              >
-                                {s}
-                              </span>
-                            ))}
-                            {m.skills.length > 3 && (
-                              <span className="text-[10px] font-mono text-slate-400 self-center">
-                                +{m.skills.length - 3}
-                              </span>
-                            )}
-                          </div>
-                        )}
+                          <Link
+                            to={`/members/${m.user_id || m.id}`}
+                            className="inline-flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 hover:underline text-xs"
+                          >
+                            <span>Profile</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </Link>
+                        </div>
                       </div>
-
-                      {/* Footer Details */}
-                      <div className="pt-3 border-t border-slate-200/80 dark:border-slate-800 flex items-center justify-between text-xs">
-                        <span className="text-[11px] font-mono text-slate-500">
-                          {m.student_id ? `ID: ${m.student_id}` : `Tenure: #${committeeDetails.committee_number}`}
-                        </span>
-
-                        <Link
-                          to={`/members/${m.user_id || m.id}`}
-                          className="inline-flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 hover:underline text-xs"
-                        >
-                          <span>Profile</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </Link>
-                      </div>
-                    </div>
+                    </ScrollReveal>
                   );
                 })}
               </div>

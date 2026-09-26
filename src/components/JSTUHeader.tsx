@@ -83,8 +83,13 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
     window.addEventListener('hashchange', updateActive);
 
     const handleScroll = () => {
-      if (location.pathname !== '/') return;
       const scrollY = window.scrollY;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      const progress = docHeight > 0 ? (scrollY / docHeight) * 100 : 0;
+      setScrollProgress(progress);
+      setIsScrolled(scrollY > 20);
+
+      if (location.pathname !== '/') return;
       if (scrollY < 200) {
         setActiveSection('home');
         return;
@@ -114,6 +119,9 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
     };
   }, [location.pathname]);
 
+  const [scrollProgress, setScrollProgress] = useState(0);
+  const [isScrolled, setIsScrolled] = useState(false);
+
   const navLinks = [
     { id: 'home', label: 'Home', href: '/' },
     { id: 'agenda', label: 'About & Agenda', href: '/#agenda' },
@@ -123,9 +131,21 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
   ];
 
   return (
-    <header className="sticky top-0 z-50 bg-white/95 dark:bg-[#080C16]/95 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-300 shadow-xs dark:shadow-md dark:shadow-indigo-950/20">
+    <header className={`sticky top-0 z-50 transition-all duration-300 ${
+      isScrolled 
+        ? 'bg-white/95 dark:bg-[#070B14]/95 backdrop-blur-2xl border-b border-slate-200/90 dark:border-slate-800/90 shadow-md shadow-indigo-950/5 dark:shadow-indigo-950/20' 
+        : 'bg-white/80 dark:bg-[#070B14]/80 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-800/50 shadow-none'
+    }`}>
+      {/* Luminous Glowing Scroll Progress Indicator */}
+      <div className="absolute top-0 left-0 right-0 h-[2.5px] bg-transparent overflow-hidden pointer-events-none z-50">
+        <div
+          className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 transition-all duration-75 ease-out shadow-[0_0_10px_rgba(99,102,241,0.8)]"
+          style={{ width: `${scrollProgress}%` }}
+        />
+      </div>
+
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 sm:h-20 gap-2 lg:gap-4">
+        <div className={`flex items-center justify-between gap-2 lg:gap-4 transition-all duration-300 ${isScrolled ? 'h-14 sm:h-16' : 'h-16 sm:h-20'}`}>
           
           {/* Brand Logo & Name (Admin Configurable) */}
           <Link to="/" className="flex items-center gap-2 sm:gap-3 group min-w-0 pr-1 lg:pr-2 flex-shrink-0">
