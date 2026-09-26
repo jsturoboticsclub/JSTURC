@@ -3,29 +3,49 @@ const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
 
-const dataDir = path.join(__dirname, 'data');
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+const tursoUrl = process.env.TURSO_DATABASE_URL || process.env.TURSO_URL;
+const tursoAuthToken = process.env.TURSO_AUTH_TOKEN;
+
+let tursoClient = null;
+let db = null;
+
+if (tursoUrl && tursoAuthToken) {
+  const { createClient } = require('@libsql/client');
+  tursoClient = createClient({ url: tursoUrl, authToken: tursoAuthToken });
+  console.log('✅ Connected to Turso Cloud SQLite database at', tursoUrl);
+  initDatabase();
+} else {
+  const dataDir = path.join(__dirname, 'data');
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+
+  const dbPath = path.join(dataDir, 'jstu_robotics.db');
+  db = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+      console.error('❌ Failed to open SQLite database:', err.message);
+    } else {
+      console.log('✅ Connected to JSTU Robotics SQLite database at', dbPath);
+      // Performance & concurrency optimizations:
+      db.run('PRAGMA journal_mode = WAL;');
+      db.run('PRAGMA synchronous = NORMAL;');
+      db.run('PRAGMA cache_size = -64000;'); // 64MB in-memory query cache
+      db.run('PRAGMA temp_store = MEMORY;');
+      db.run('PRAGMA mmap_size = 268435456;'); // 256MB memory-mapped I/O for zero-copy reads
+      initDatabase();
+    }
+  });
 }
 
-const dbPath = path.join(dataDir, 'jstu_robotics.db');
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('❌ Failed to open SQLite database:', err.message);
-  } else {
-    console.log('✅ Connected to JSTU Robotics SQLite database at', dbPath);
-    // Performance & concurrency optimizations:
-    db.run('PRAGMA journal_mode = WAL;');
-    db.run('PRAGMA synchronous = NORMAL;');
-    db.run('PRAGMA cache_size = -64000;'); // 64MB in-memory query cache
-    db.run('PRAGMA temp_store = MEMORY;');
-    db.run('PRAGMA mmap_size = 268435456;'); // 256MB memory-mapped I/O for zero-copy reads
-    initDatabase();
+// Promisified query helpers (Works seamlessly with Turso Cloud or local SQLite)
+async function runQuery(sql, params = []) {
+  if (tursoClient) {
+    const res = await tursoClient.execute({ sql, args: params });
+    return {
+      id: res.lastInsertRowid != null ? Number(res.lastInsertRowid) : undefined,
+      changes: res.rowsAffected
+    };
   }
-});
-
-// Promisified query helpers
-function runQuery(sql, params = []) {
   return new Promise((resolve, reject) => {
     db.run(sql, params, function (err) {
       if (err) reject(err);
@@ -34,7 +54,12 @@ function runQuery(sql, params = []) {
   });
 }
 
-function getQuery(sql, params = []) {
+async function getQuery(sql, params = []) {
+  if (tursoClient) {
+    const res = await tursoClient.execute({ sql, args: params });
+    if (!res.rows || res.rows.length === 0) return null;
+    return { ...res.rows[0] };
+  }
   return new Promise((resolve, reject) => {
     db.get(sql, params, (err, row) => {
       if (err) reject(err);
@@ -43,7 +68,11 @@ function getQuery(sql, params = []) {
   });
 }
 
-function allQuery(sql, params = []) {
+async function allQuery(sql, params = []) {
+  if (tursoClient) {
+    const res = await tursoClient.execute({ sql, args: params });
+    return res.rows.map(row => ({ ...row }));
+  }
   return new Promise((resolve, reject) => {
     db.all(sql, params, (err, rows) => {
       if (err) reject(err);
@@ -53,152 +82,128 @@ function allQuery(sql, params = []) {
 }
 
 async function initDatabase() {
-  db.serialize(async () => {
-    // 1. Users Table
-    db.run(`
-      CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        name TEXT NOT NULL,
-        role TEXT NOT NULL CHECK(role IN ('Admin', 'Member')) DEFAULT 'Member',
-        status TEXT NOT NULL CHECK(status IN ('approved', 'pending', 'rejected')) DEFAULT 'approved',
-        committee_role TEXT DEFAULT 'Standard Member',
-        department TEXT DEFAULT 'Computer Science & Engineering',
-        student_id TEXT,
-        bio TEXT,
-        skills TEXT,
-        profile_photo TEXT,
-        contact_links TEXT,
-        project_contributions TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+  const tableDefinitions = [
+    `CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      name TEXT NOT NULL,
+      role TEXT NOT NULL CHECK(role IN ('Admin', 'Member')) DEFAULT 'Member',
+      status TEXT NOT NULL CHECK(status IN ('approved', 'pending', 'rejected')) DEFAULT 'approved',
+      committee_role TEXT DEFAULT 'Standard Member',
+      department TEXT DEFAULT 'Computer Science & Engineering',
+      student_id TEXT,
+      bio TEXT,
+      skills TEXT,
+      profile_photo TEXT,
+      contact_links TEXT,
+      project_contributions TEXT,
+      committee_category TEXT DEFAULT 'Auto',
+      committee_id INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS site_content (
+      key TEXT PRIMARY KEY,
+      section TEXT NOT NULL,
+      title TEXT,
+      content TEXT NOT NULL,
+      meta_json TEXT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS projects (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      category TEXT NOT NULL,
+      description TEXT NOT NULL,
+      status TEXT DEFAULT 'Active',
+      image_url TEXT,
+      github_link TEXT,
+      tech_stack TEXT,
+      team_members TEXT,
+      approval_status TEXT DEFAULT 'approved',
+      submitted_by_id INTEGER,
+      submitted_by_name TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS agenda_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      date TEXT,
+      badge TEXT,
+      order_num INTEGER DEFAULT 0
+    )`,
+    `CREATE TABLE IF NOT EXISTS directory_roles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE NOT NULL,
+      priority INTEGER DEFAULT 0,
+      category TEXT DEFAULT 'Executive'
+    )`,
+    `CREATE TABLE IF NOT EXISTS announcements (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      priority TEXT DEFAULT 'normal',
+      author_name TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS password_resets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT NOT NULL,
+      code TEXT NOT NULL,
+      expires_at DATETIME NOT NULL,
+      used INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS committees (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      committee_number INTEGER NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      session_years TEXT NOT NULL,
+      is_current INTEGER DEFAULT 0,
+      theme_motto TEXT,
+      description TEXT,
+      banner_url TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS committee_members (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      committee_id INTEGER NOT NULL REFERENCES committees(id) ON DELETE CASCADE,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      name TEXT NOT NULL,
+      email TEXT,
+      department TEXT DEFAULT 'Computer Science & Engineering',
+      student_id TEXT,
+      designation TEXT NOT NULL,
+      category TEXT NOT NULL CHECK(category IN ('Executive', 'Lead', 'Advisor', 'Member')),
+      is_override INTEGER DEFAULT 0,
+      profile_photo TEXT,
+      bio TEXT,
+      skills TEXT,
+      social_links TEXT,
+      display_order INTEGER DEFAULT 10,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`
+  ];
 
-    // 2. Site Content Table
-    db.run(`
-      CREATE TABLE IF NOT EXISTS site_content (
-        key TEXT PRIMARY KEY,
-        section TEXT NOT NULL,
-        title TEXT,
-        content TEXT NOT NULL,
-        meta_json TEXT,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+  for (const sql of tableDefinitions) {
+    try {
+      await runQuery(sql);
+    } catch (err) {
+      // Table already exists or silent pass
+    }
+  }
 
-    // 3. Projects Table
-    db.run(`
-      CREATE TABLE IF NOT EXISTS projects (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT NOT NULL,
-        category TEXT NOT NULL,
-        description TEXT NOT NULL,
-        status TEXT DEFAULT 'Active',
-        image_url TEXT,
-        github_link TEXT,
-        tech_stack TEXT,
-        team_members TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+  // Safe Column Migrations
+  try { await runQuery(`ALTER TABLE projects ADD COLUMN approval_status TEXT DEFAULT 'approved'`); } catch (e) { }
+  try { await runQuery(`ALTER TABLE projects ADD COLUMN submitted_by_id INTEGER`); } catch (e) { }
+  try { await runQuery(`ALTER TABLE projects ADD COLUMN submitted_by_name TEXT`); } catch (e) { }
+  try { await runQuery(`ALTER TABLE users ADD COLUMN committee_category TEXT DEFAULT 'Auto'`); } catch (e) { }
+  try { await runQuery(`ALTER TABLE users ADD COLUMN committee_id INTEGER DEFAULT 1`); } catch (e) { }
 
-    // 4. Agenda Items Table
-    db.run(`
-      CREATE TABLE IF NOT EXISTS agenda_items (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT NOT NULL,
-        description TEXT NOT NULL,
-        date TEXT,
-        badge TEXT,
-        order_num INTEGER DEFAULT 0
-      )
-    `);
-
-    // 5. Directory Roles Table
-    db.run(`
-      CREATE TABLE IF NOT EXISTS directory_roles (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT UNIQUE NOT NULL,
-        priority INTEGER DEFAULT 0,
-        category TEXT DEFAULT 'Executive'
-      )
-    `);
-
-    // 6. Announcements Table
-    db.run(`
-      CREATE TABLE IF NOT EXISTS announcements (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        title TEXT NOT NULL,
-        content TEXT NOT NULL,
-        priority TEXT DEFAULT 'normal',
-        author_name TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // 7. Password Resets Table
-    db.run(`
-      CREATE TABLE IF NOT EXISTS password_resets (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        email TEXT NOT NULL,
-        code TEXT NOT NULL,
-        expires_at DATETIME NOT NULL,
-        used INTEGER DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Safe Column Migrations for Project Proposals
-    db.run(`ALTER TABLE projects ADD COLUMN approval_status TEXT DEFAULT 'approved'`, () => { });
-    db.run(`ALTER TABLE projects ADD COLUMN submitted_by_id INTEGER`, () => { });
-    db.run(`ALTER TABLE projects ADD COLUMN submitted_by_name TEXT`, () => { });
-
-    // 8. Committees Table (Annual / Tenure Committees with Committee Numbers)
-    db.run(`
-      CREATE TABLE IF NOT EXISTS committees (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        committee_number INTEGER NOT NULL UNIQUE,
-        title TEXT NOT NULL,
-        session_years TEXT NOT NULL,
-        is_current INTEGER DEFAULT 0,
-        theme_motto TEXT,
-        description TEXT,
-        banner_url TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // 9. Committee Members Table (Explicit categorization: Executive, Lead, Advisor, Member)
-    db.run(`
-      CREATE TABLE IF NOT EXISTS committee_members (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        committee_id INTEGER NOT NULL REFERENCES committees(id) ON DELETE CASCADE,
-        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-        name TEXT NOT NULL,
-        email TEXT,
-        department TEXT DEFAULT 'Computer Science & Engineering',
-        student_id TEXT,
-        designation TEXT NOT NULL,
-        category TEXT NOT NULL CHECK(category IN ('Executive', 'Lead', 'Advisor', 'Member')),
-        is_override INTEGER DEFAULT 0,
-        profile_photo TEXT,
-        bio TEXT,
-        skills TEXT,
-        social_links TEXT,
-        display_order INTEGER DEFAULT 10,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Safe Column Migrations for users table (Committee linkage & category override)
-    db.run(`ALTER TABLE users ADD COLUMN committee_category TEXT DEFAULT 'Auto'`, () => { });
-    db.run(`ALTER TABLE users ADD COLUMN committee_id INTEGER DEFAULT 1`, () => { });
-
-    await seedInitialData();
-    await ensureMasterAdmin();
-    await ensureRegisteredMembers();
-  });
+  await seedInitialData();
+  await ensureMasterAdmin();
+  await ensureRegisteredMembers();
 }
 
 async function seedInitialData() {
@@ -754,13 +759,13 @@ async function ensureMasterAdmin() {
       );
       console.log(`🔐 Master Admin account created: ${adminEmail}`);
     } else {
-      await runQuery('UPDATE users SET password_hash = ?, role = "Admin", status = "approved" WHERE LOWER(email) = LOWER(?)', [newHash, adminEmail]);
+      await runQuery("UPDATE users SET password_hash = ?, role = 'Admin', status = 'approved' WHERE LOWER(email) = LOWER(?)", [newHash, adminEmail]);
       console.log(`🔐 Master Admin credentials updated: ${adminEmail}`);
     }
 
     // Permanently remove legacy demo accounts so no one can manipulate
-    await runQuery('DELETE FROM users WHERE LOWER(email) IN ("admin@jstu.edu", "member@jstu.edu")');
-    await runQuery('DELETE FROM committee_members WHERE LOWER(email) IN ("admin@jstu.edu", "member@jstu.edu")');
+    await runQuery("DELETE FROM users WHERE LOWER(email) IN ('admin@jstu.edu', 'member@jstu.edu')");
+    await runQuery("DELETE FROM committee_members WHERE LOWER(email) IN ('admin@jstu.edu', 'member@jstu.edu')");
     console.log('🧹 Purged legacy demo accounts (admin@jstu.edu, member@jstu.edu)');
   } catch (err) {
     console.error('❌ Error ensuring master admin:', err);

@@ -23,6 +23,10 @@ dist-ssr
 */.env
 .env.backup
 .env-backups/
+cloudinary.txt
+turso token.txt
+*.token.txt
+
 
 # Editor directories and files
 .vscode/*

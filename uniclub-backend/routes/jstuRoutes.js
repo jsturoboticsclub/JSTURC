@@ -3,6 +3,21 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { runQuery, getQuery, allQuery, inferMemberCategory } = require('../db');
+const CloudinaryService = require('../services/CloudinaryService');
+
+async function maybeUploadToCloudinary(imageStr, folder = 'jstu_robotics/general', publicId = null) {
+  if (!imageStr || typeof imageStr !== 'string') return imageStr;
+  if (imageStr.startsWith('data:image/')) {
+    try {
+      const cdnUrl = await CloudinaryService.uploadImage(imageStr, folder, publicId);
+      return cdnUrl;
+    } catch (err) {
+      console.error('Failed to upload image to Cloudinary, keeping original:', err.message);
+      return imageStr;
+    }
+  }
+  return imageStr;
+}
 
 const JWT_SECRET = process.env.JWT_SECRET || 'jstu_robotics_club_jwt_secret_2026';
 
@@ -33,6 +48,25 @@ const requireAdmin = (req, res, next) => {
   }
   next();
 };
+
+// ==========================================
+// 0. CLOUDINARY MEDIA UPLOAD ROUTES
+// ==========================================
+
+// POST /api/upload/image: Upload image data URI or base64 directly to Cloudinary
+router.post(['/upload/image', '/api/upload/image'], authenticate, async (req, res) => {
+  try {
+    const { image, folder, public_id } = req.body;
+    if (!image) {
+      return res.status(400).json({ error: 'Image data or base64 string is required' });
+    }
+    const secureUrl = await CloudinaryService.uploadImage(image, folder || 'jstu_robotics/uploads', public_id || null);
+    res.json({ success: true, url: secureUrl });
+  } catch (err) {
+    console.error('Cloudinary upload error:', err);
+    res.status(500).json({ error: 'Failed to upload image to Cloudinary', details: err.message });
+  }
+});
 
 // ==========================================
 // 1. PUBLIC LANDING PAGE & DIRECTORY ROUTES
@@ -1130,7 +1164,11 @@ router.put('/member/profile', authenticate, async (req, res) => {
   try {
     const { name, bio, skills, profile_photo, contact_links, department, student_id } = req.body;
     const userId = req.user.id;
-    const cleanPhoto = (profile_photo && typeof profile_photo === 'string' && profile_photo.trim()) ? profile_photo.trim() : null;
+    let cleanPhoto = (profile_photo && typeof profile_photo === 'string' && profile_photo.trim()) ? profile_photo.trim() : null;
+
+    if (cleanPhoto) {
+      cleanPhoto = await maybeUploadToCloudinary(cleanPhoto, 'jstu_robotics/members', `user_${userId}`);
+    }
 
     const skillsJson = Array.isArray(skills) ? JSON.stringify(skills) : JSON.stringify([]);
     const contactLinksJson = typeof contact_links === 'object' ? JSON.stringify(contact_links) : JSON.stringify({});
@@ -1204,6 +1242,11 @@ router.put('/admin/site-config', authenticate, requireAdmin, async (req, res) =>
     if (!config) {
       return res.status(400).json({ error: 'Config object required' });
     }
+
+    if (config.logo_url && typeof config.logo_url === 'string' && config.logo_url.startsWith('data:image/')) {
+      config.logo_url = await maybeUploadToCloudinary(config.logo_url, 'jstu_robotics/branding', 'site_logo');
+    }
+
     const metaJson = JSON.stringify(config);
     const existing = await getQuery('SELECT key FROM site_content WHERE key = "site_config"');
     if (existing) {
@@ -1232,6 +1275,11 @@ router.put('/admin/site-content', authenticate, requireAdmin, async (req, res) =
       return res.status(400).json({ error: 'Key and content are required' });
     }
 
+    let finalContent = content;
+    if (typeof finalContent === 'string' && finalContent.startsWith('data:image/')) {
+      finalContent = await maybeUploadToCloudinary(finalContent, 'jstu_robotics/cms', `content_${key}`);
+    }
+
     const metaJson = meta ? JSON.stringify(meta) : null;
 
     const existing = await getQuery('SELECT key FROM site_content WHERE key = ?', [key]);
@@ -1243,13 +1291,13 @@ router.put('/admin/site-content', authenticate, requireAdmin, async (req, res) =
              meta_json = COALESCE(?, meta_json),
              updated_at = CURRENT_TIMESTAMP
          WHERE key = ?`,
-        [title, content, metaJson, key]
+        [title, finalContent, metaJson, key]
       );
     } else {
       await runQuery(
         `INSERT INTO site_content (key, section, title, content, meta_json)
          VALUES (?, 'custom', ?, ?, ?)`,
-        [key, title || '', content, metaJson]
+        [key, title || '', finalContent, metaJson]
       );
     }
 
@@ -1318,7 +1366,10 @@ router.put('/admin/users/:id/status', authenticate, requireAdmin, async (req, re
 router.put('/admin/users/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     const { name, email, role, status, committee_role, department, student_id, bio, skills, profile_photo } = req.body;
-    const cleanPhoto = (profile_photo && typeof profile_photo === 'string' && profile_photo.trim()) ? profile_photo.trim() : null;
+    let cleanPhoto = (profile_photo && typeof profile_photo === 'string' && profile_photo.trim()) ? profile_photo.trim() : null;
+    if (cleanPhoto) {
+      cleanPhoto = await maybeUploadToCloudinary(cleanPhoto, 'jstu_robotics/members', `user_${req.params.id}`);
+    }
     const skillsJson = Array.isArray(skills) ? JSON.stringify(skills) : null;
 
     await runQuery(
@@ -1378,13 +1429,14 @@ router.delete('/admin/users/:id', authenticate, requireAdmin, async (req, res) =
 router.post('/admin/projects', authenticate, requireAdmin, async (req, res) => {
   try {
     const { title, category, description, status, image_url, github_link, tech_stack, team_members } = req.body;
+    const finalImageUrl = await maybeUploadToCloudinary(image_url, 'jstu_robotics/projects');
     const techStackJson = Array.isArray(tech_stack) ? JSON.stringify(tech_stack) : JSON.stringify([]);
     const teamMembersJson = Array.isArray(team_members) ? JSON.stringify(team_members) : JSON.stringify([]);
 
     const result = await runQuery(
       `INSERT INTO projects (title, category, description, status, image_url, github_link, tech_stack, team_members)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [title, category || 'Robotics', description, status || 'Active', image_url, github_link, techStackJson, teamMembersJson]
+      [title, category || 'Robotics', description, status || 'Active', finalImageUrl, github_link, techStackJson, teamMembersJson]
     );
 
     res.status(201).json({ success: true, message: 'Project created successfully', id: result.id });
@@ -1396,6 +1448,7 @@ router.post('/admin/projects', authenticate, requireAdmin, async (req, res) => {
 router.put('/admin/projects/:id', authenticate, requireAdmin, async (req, res) => {
   try {
     const { title, category, description, status, image_url, github_link, tech_stack, team_members } = req.body;
+    const finalImageUrl = await maybeUploadToCloudinary(image_url, 'jstu_robotics/projects');
     const techStackJson = Array.isArray(tech_stack) ? JSON.stringify(tech_stack) : null;
     const teamMembersJson = Array.isArray(team_members) ? JSON.stringify(team_members) : null;
 
@@ -1410,7 +1463,7 @@ router.put('/admin/projects/:id', authenticate, requireAdmin, async (req, res) =
            tech_stack = COALESCE(?, tech_stack),
            team_members = COALESCE(?, team_members)
        WHERE id = ?`,
-      [title, category, description, status, image_url, github_link, techStackJson, teamMembersJson, req.params.id]
+      [title, category, description, status, finalImageUrl, github_link, techStackJson, teamMembersJson, req.params.id]
     );
 
     res.json({ success: true, message: 'Project updated successfully' });
