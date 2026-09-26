@@ -19,7 +19,7 @@ async function maybeUploadToCloudinary(imageStr, folder = 'jstu_robotics/general
   return imageStr;
 }
 
-const JWT_SECRET = process.env.JWT_SECRET || 'jstu_robotics_club_jwt_secret_2026';
+const JWT_SECRET = process.env.JWT_SECRET || 'jstu_robotics_club_jwt_secret_2026_super_secure';
 
 // Middleware to authenticate JWT
 const authenticate = (req, res, next) => {
@@ -1064,8 +1064,12 @@ router.get('/member/dashboard', authenticate, async (req, res) => {
       [req.user.id]
     );
 
+    if (!user) {
+      return res.status(404).json({ error: 'User profile not found' });
+    }
+
     const announcements = await allQuery('SELECT * FROM announcements ORDER BY id DESC LIMIT 5');
-    const projects = await allQuery('SELECT * FROM projects WHERE status = "Active" OR status = "Active Development" LIMIT 4');
+    const projects = await allQuery("SELECT * FROM projects WHERE status = 'Active' OR status = 'Active Development' LIMIT 4");
 
     let skills = [];
     let contact_links = {};
@@ -1248,15 +1252,15 @@ router.put('/admin/site-config', authenticate, requireAdmin, async (req, res) =>
     }
 
     const metaJson = JSON.stringify(config);
-    const existing = await getQuery('SELECT key FROM site_content WHERE key = "site_config"');
+    const existing = await getQuery("SELECT key FROM site_content WHERE key = 'site_config'");
     if (existing) {
       await runQuery(
-        'UPDATE site_content SET content = "Master Site Configuration", meta_json = ?, updated_at = CURRENT_TIMESTAMP WHERE key = "site_config"',
+        "UPDATE site_content SET content = 'Master Site Configuration', meta_json = ?, updated_at = CURRENT_TIMESTAMP WHERE key = 'site_config'",
         [metaJson]
       );
     } else {
       await runQuery(
-        'INSERT INTO site_content (key, section, title, content, meta_json) VALUES ("site_config", "system", "Master Configuration", "Master Site Configuration", ?)',
+        "INSERT INTO site_content (key, section, title, content, meta_json) VALUES ('site_config', 'system', 'Master Configuration', 'Master Site Configuration', ?)",
         [metaJson]
       );
     }

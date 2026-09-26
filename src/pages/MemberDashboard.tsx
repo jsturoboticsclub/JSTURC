@@ -10,11 +10,21 @@ import { fileToBase64Image } from '../utils/imageHelper';
 
 export const MemberDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [profile, setProfile] = useState<any>(null);
+
+  // Instant local profile state to prevent header flashing/logout appearance
+  const [profile, setProfile] = useState<any>(() => {
+    try {
+      const u = localStorage.getItem('user');
+      return u ? JSON.parse(u) : null;
+    } catch {
+      return null;
+    }
+  });
+
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [activeProjects, setActiveProjects] = useState<any[]>([]);
   const [myProposals, setMyProposals] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!profile);
 
   // Proposal modal state
   const [isProposalModalOpen, setIsProposalModalOpen] = useState(false);
@@ -30,16 +40,33 @@ export const MemberDashboard: React.FC = () => {
   const [proposalStatus, setProposalStatus] = useState<{ success?: boolean; message?: string } | null>(null);
   const [isSubmittingProposal, setIsSubmittingProposal] = useState(false);
 
-  // Edit form state
-  const [formData, setFormData] = useState({
-    name: '',
-    department: '',
-    student_id: '',
-    bio: '',
-    profile_photo: '',
-    skillsString: '',
-    github: '',
-    linkedin: '',
+  // Edit form state initialized from local cache
+  const [formData, setFormData] = useState(() => {
+    try {
+      const u = localStorage.getItem('user');
+      const p = u ? JSON.parse(u) : null;
+      return {
+        name: p?.name || '',
+        department: p?.department || '',
+        student_id: p?.student_id || '',
+        bio: p?.bio || '',
+        profile_photo: p?.profile_photo || '',
+        skillsString: Array.isArray(p?.skills) ? p.skills.join(', ') : '',
+        github: p?.contact_links?.github || '',
+        linkedin: p?.contact_links?.linkedin || '',
+      };
+    } catch {
+      return {
+        name: '',
+        department: '',
+        student_id: '',
+        bio: '',
+        profile_photo: '',
+        skillsString: '',
+        github: '',
+        linkedin: '',
+      };
+    }
   });
 
   const [saveStatus, setSaveStatus] = useState<{ success?: boolean; message?: string } | null>(null);
@@ -74,37 +101,41 @@ export const MemberDashboard: React.FC = () => {
     }
 
     try {
-      setLoading(true);
+      if (!profile) setLoading(true);
       const res = await fetch('/api/member/dashboard', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
       if (!res.ok) {
-        if (res.status === 401 || res.status === 403) {
+        if (res.status === 401) {
           localStorage.removeItem('token');
+          localStorage.removeItem('user');
           navigate('/auth');
           return;
         }
-        throw new Error('Failed to load dashboard');
+        throw new Error('Failed to load dashboard data');
       }
 
       const data = await res.json();
-      const p = data.data.profile;
-      setProfile(p);
-      setAnnouncements(data.data.announcements || []);
-      setActiveProjects(data.data.activeProjects || []);
-      setMyProposals(data.data.myProposals || []);
+      if (data.data?.profile) {
+        const p = data.data.profile;
+        setProfile(p);
+        localStorage.setItem('user', JSON.stringify(p));
+        setAnnouncements(data.data.announcements || []);
+        setActiveProjects(data.data.activeProjects || []);
+        setMyProposals(data.data.myProposals || []);
 
-      setFormData({
-        name: p.name || '',
-        department: p.department || '',
-        student_id: p.student_id || '',
-        bio: p.bio || '',
-        profile_photo: p.profile_photo || '',
-        skillsString: p.skills ? p.skills.join(', ') : '',
-        github: p.contact_links?.github || '',
-        linkedin: p.contact_links?.linkedin || '',
-      });
+        setFormData({
+          name: p.name || '',
+          department: p.department || '',
+          student_id: p.student_id || '',
+          bio: p.bio || '',
+          profile_photo: p.profile_photo || '',
+          skillsString: Array.isArray(p.skills) ? p.skills.join(', ') : '',
+          github: p.contact_links?.github || '',
+          linkedin: p.contact_links?.linkedin || '',
+        });
+      }
     } catch (err: any) {
       console.error('Error fetching dashboard:', err);
     } finally {
