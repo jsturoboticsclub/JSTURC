@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { 
   Cpu, Zap, Compass, Users, ChevronRight, Award, 
   ExternalLink, Search, CheckCircle2, ShieldCheck, 
@@ -13,6 +13,7 @@ import AnimatedCounter from '../components/AnimatedCounter';
 import { SkeletonHero } from '../components/SkeletonLoader';
 
 export const JSTULandingPage: React.FC = () => {
+  const location = useLocation();
   const [siteContent, setSiteContent] = useState<any>(null);
   const [members, setMembers] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
@@ -91,6 +92,51 @@ export const JSTULandingPage: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (location.state && (location.state as any).scrollTo) {
+      const sectionId = (location.state as any).scrollTo;
+      setTimeout(() => {
+        const el = document.getElementById(sectionId);
+        if (el) {
+          const headerOffset = 80;
+          const elementPosition = el.getBoundingClientRect().top;
+          const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+          window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
+        }
+      }, 150);
+      window.history.replaceState(null, '', '/');
+    } else if (window.location.hash) {
+      const sectionId = window.location.hash.replace('#', '');
+      setTimeout(() => {
+        const el = document.getElementById(sectionId);
+        if (el) {
+          const headerOffset = 80;
+          const elementPosition = el.getBoundingClientRect().top;
+          const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+          window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
+        }
+        window.history.replaceState(null, '', '/');
+      }, 150);
+    }
+  }, [location]);
+
+  const handleSmoothScroll = (e: React.MouseEvent, targetLink: string) => {
+    e.preventDefault();
+    if (!targetLink) return;
+    const targetId = targetLink.replace('#', '').replace('/', '');
+    const el = document.getElementById(targetId);
+    if (el) {
+      const headerOffset = 80;
+      const elementPosition = el.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth'
+      });
+      window.history.replaceState(null, '', '/');
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -815,8 +861,9 @@ export const JSTULandingPage: React.FC = () => {
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 sm:gap-4 mb-12 sm:mb-16 w-full max-w-sm sm:max-w-none mx-auto">
               {siteConfig.hero_cta_primary?.show !== false && (
                 <a
-                  href={siteConfig.hero_cta_primary?.link || '#join'}
-                  className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 rounded-2xl text-sm sm:text-base font-bold bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-xl shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center gap-2 group"
+                  href="/"
+                  onClick={(e) => handleSmoothScroll(e, siteConfig.hero_cta_primary?.link || '#join')}
+                  className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 rounded-2xl text-sm sm:text-base font-bold bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-xl shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center gap-2 group cursor-pointer"
                 >
                   <span>{siteConfig.hero_cta_primary?.text || 'Apply for Membership'}</span>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -825,8 +872,9 @@ export const JSTULandingPage: React.FC = () => {
 
               {siteConfig.hero_cta_secondary?.show !== false && (
                 <a
-                  href={siteConfig.hero_cta_secondary?.link || '#projects'}
-                  className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 rounded-2xl text-sm sm:text-base font-bold bg-white dark:bg-slate-900/90 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-300 dark:border-slate-700 shadow-md hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center gap-2"
+                  href="/"
+                  onClick={(e) => handleSmoothScroll(e, siteConfig.hero_cta_secondary?.link || '#projects')}
+                  className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 rounded-2xl text-sm sm:text-base font-bold bg-white dark:bg-slate-900/90 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-300 dark:border-slate-700 shadow-md hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <span>{siteConfig.hero_cta_secondary?.text || 'Explore Active Bots'}</span>
                   <Cpu className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
@@ -835,8 +883,9 @@ export const JSTULandingPage: React.FC = () => {
 
               {siteConfig.hero_cta_tertiary?.show !== false && (
                 <a
-                  href={siteConfig.hero_cta_tertiary?.link || '#directory'}
-                  className="w-full sm:w-auto px-5 py-3 rounded-2xl text-xs sm:text-base font-bold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-white transition-colors flex items-center justify-center gap-1.5"
+                  href="/"
+                  onClick={(e) => handleSmoothScroll(e, siteConfig.hero_cta_tertiary?.link || '#directory')}
+                  className="w-full sm:w-auto px-5 py-3 rounded-2xl text-xs sm:text-base font-bold text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-white transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <span>{siteConfig.hero_cta_tertiary?.text || 'Member Directory'}</span>
                   <ChevronRight className="w-4 h-4" />

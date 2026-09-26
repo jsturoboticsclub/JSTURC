@@ -94,7 +94,8 @@ export const NotFoundPage: React.FC = () => {
               </Link>
 
               <Link
-                to="/#projects"
+                to="/"
+                state={{ scrollTo: 'projects' }}
                 className="p-4 rounded-2xl bg-white dark:bg-[#0D1424] hover:bg-slate-50 dark:hover:bg-slate-800/80 border border-slate-200 dark:border-slate-800 text-left flex items-center gap-3.5 group transition-all shadow-sm hover:shadow-md"
               >
                 <div className="p-2.5 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 group-hover:scale-110 transition-transform">
@@ -111,7 +112,8 @@ export const NotFoundPage: React.FC = () => {
               </Link>
 
               <Link
-                to="/#directory"
+                to="/"
+                state={{ scrollTo: 'directory' }}
                 className="p-4 rounded-2xl bg-white dark:bg-[#0D1424] hover:bg-slate-50 dark:hover:bg-slate-800/80 border border-slate-200 dark:border-slate-800 text-left flex items-center gap-3.5 group transition-all shadow-sm hover:shadow-md"
               >
                 <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform">

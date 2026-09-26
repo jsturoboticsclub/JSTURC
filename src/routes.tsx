@@ -57,7 +57,7 @@ const AppRoutes: React.FC = () => {
         <Route path="/admin" element={<AdminRouteGuard><AdminCMSPanel /></AdminRouteGuard>} />
         <Route path="/auth" element={<AuthPage />} />
         <Route path="/login" element={<Navigate to="/auth" replace />} />
-        <Route path="/join" element={<Navigate to="/#join" replace />} />
+        <Route path="/join" element={<Navigate to="/" state={{ scrollTo: 'join' }} replace />} />
         <Route path="/404" element={<NotFoundPage />} />
 
         {/* Legacy / Auxiliary Routes */}

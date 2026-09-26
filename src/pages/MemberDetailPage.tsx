@@ -71,7 +71,8 @@ export const MemberDetailPage: React.FC = () => {
           <h2 className="text-2xl font-black mb-2 text-slate-900 dark:text-white">Member Profile Not Found</h2>
           <p className="text-slate-600 dark:text-slate-400 text-sm mb-6">{error || 'This member profile does not exist or has not been approved.'}</p>
           <Link
-            to="/#directory"
+            to="/"
+            state={{ scrollTo: 'directory' }}
             className="inline-flex items-center gap-2 px-6 py-3 rounded-2xl bg-indigo-600 text-white font-bold text-sm shadow-lg shadow-indigo-500/25 hover:bg-indigo-500 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -89,7 +90,8 @@ export const MemberDetailPage: React.FC = () => {
       <main className="flex-1 max-w-5xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-10">
         {/* Back Link */}
         <Link
-          to="/#directory"
+          to="/"
+          state={{ scrollTo: 'directory' }}
           className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 mb-8 transition-colors group"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />

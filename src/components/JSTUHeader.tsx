@@ -123,12 +123,66 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
   const [isScrolled, setIsScrolled] = useState(false);
 
   const navLinks = [
-    { id: 'home', label: 'Home', href: '/' },
-    { id: 'agenda', label: 'About & Agenda', href: '/#agenda' },
-    { id: 'projects', label: 'Projects', href: '/#projects' },
-    { id: 'committees', label: 'Committees', href: '/committees' },
-    { id: 'directory', label: 'Member Directory', href: '/#directory' },
+    { id: 'home', label: 'Home', sectionId: 'home', route: '/' },
+    { id: 'agenda', label: 'About & Agenda', sectionId: 'agenda' },
+    { id: 'projects', label: 'Projects', sectionId: 'projects' },
+    { id: 'committees', label: 'Committees', route: '/committees' },
+    { id: 'directory', label: 'Member Directory', sectionId: 'directory' },
   ];
+
+  const handleNavClick = (e: React.MouseEvent, link: any) => {
+    e.preventDefault();
+
+    if (link.route && !link.sectionId) {
+      navigate(link.route);
+      setActiveSection(link.id);
+      return;
+    }
+
+    if (location.pathname === '/') {
+      if (link.sectionId === 'home') {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        setActiveSection('home');
+        window.history.replaceState(null, '', '/');
+        return;
+      }
+
+      const targetEl = document.getElementById(link.sectionId);
+      if (targetEl) {
+        const headerOffset = 80;
+        const elementPosition = targetEl.getBoundingClientRect().top;
+        const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+        window.scrollTo({
+          top: offsetPosition,
+          behavior: 'smooth'
+        });
+        setActiveSection(link.id);
+        window.history.replaceState(null, '', '/');
+      }
+    } else {
+      navigate('/', { state: { scrollTo: link.sectionId } });
+    }
+  };
+
+  const handleJoinClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (location.pathname === '/') {
+      const targetEl = document.getElementById('join');
+      if (targetEl) {
+        const headerOffset = 80;
+        const elementPosition = targetEl.getBoundingClientRect().top;
+        const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+        window.scrollTo({
+          top: offsetPosition,
+          behavior: 'smooth'
+        });
+        window.history.replaceState(null, '', '/');
+      }
+    } else {
+      navigate('/', { state: { scrollTo: 'join' } });
+    }
+    setIsMobileMenuOpen(false);
+  };
 
   return (
     <header className={`sticky top-0 z-50 transition-all duration-300 ${
@@ -179,9 +233,9 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
               return (
                 <a
                   key={link.id}
-                  href={link.href}
-                  onClick={() => setActiveSection(link.id)}
-                  className={`h-8 xl:h-9 px-2.5 xl:px-3.5 rounded-xl text-xs xl:text-[13px] font-bold whitespace-nowrap flex items-center justify-center gap-1.5 transition-all duration-200 ease-out select-none ${
+                  href={link.route || '/'}
+                  onClick={(e) => handleNavClick(e, link)}
+                  className={`h-8 xl:h-9 px-2.5 xl:px-3.5 rounded-xl text-xs xl:text-[13px] font-bold whitespace-nowrap flex items-center justify-center gap-1.5 transition-all duration-200 ease-out select-none cursor-pointer ${
                     isSelected
                       ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200/80 dark:border-indigo-500/30 scale-100'
                       : 'text-slate-600 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60 hover:scale-105 active:scale-95 border border-transparent'
@@ -270,8 +324,9 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
                 </Link>
 
                 <a
-                  href="/#join"
-                  className="h-8 xl:h-9 px-3.5 xl:px-4 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-md shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-105 active:scale-95 transition-all duration-200 flex items-center justify-center gap-1.5 whitespace-nowrap group"
+                  href="/"
+                  onClick={handleJoinClick}
+                  className="h-8 xl:h-9 px-3.5 xl:px-4 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-md shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-105 active:scale-95 transition-all duration-200 flex items-center justify-center gap-1.5 whitespace-nowrap group cursor-pointer"
                 >
                   <span>Apply to Join</span>
                   <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform duration-200 flex-shrink-0" />
@@ -344,12 +399,12 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
               return (
                 <a
                   key={link.id}
-                  href={link.href}
-                  onClick={() => {
-                    setActiveSection(link.id);
+                  href={link.route || '/'}
+                  onClick={(e) => {
+                    handleNavClick(e, link);
                     setIsMobileMenuOpen(false);
                   }}
-                  className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                  className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer ${
                     isSelected
                       ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/60 dark:border-indigo-800/60 shadow-xs'
                       : 'text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/80'
@@ -424,9 +479,9 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
                   Sign In to Portal
                 </Link>
                 <a
-                  href="/#join"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="w-full text-center py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 text-white font-bold text-sm shadow-md shadow-indigo-500/25"
+                  href="/"
+                  onClick={handleJoinClick}
+                  className="w-full text-center py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 text-white font-bold text-sm shadow-md shadow-indigo-500/25 cursor-pointer"
                 >
                   Apply for Membership
                 </a>
