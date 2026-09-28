@@ -732,8 +732,8 @@ async function seedInitialData() {
 // Ensure Master Admin account exists with user-specified credentials and purge legacy demo accounts
 async function ensureMasterAdmin() {
   try {
-    const adminEmail = 'jsturoboticsclub@gmail.com';
-    const adminPassPlain = '@@2017JSTURC2017@@';
+    const adminEmail = process.env.ADMIN_EMAIL || 'jsturoboticsclub@gmail.com';
+    const adminPassPlain = process.env.ADMIN_INITIAL_PASSWORD || 'Admin@Jstu2026!';
     const salt = await bcrypt.genSalt(10);
     const newHash = await bcrypt.hash(adminPassPlain, salt);
 
@@ -759,8 +759,14 @@ async function ensureMasterAdmin() {
       );
       console.log(`🔐 Master Admin account created: ${adminEmail}`);
     } else {
-      await runQuery("UPDATE users SET password_hash = ?, role = 'Admin', status = 'approved' WHERE LOWER(email) = LOWER(?)", [newHash, adminEmail]);
-      console.log(`🔐 Master Admin credentials updated: ${adminEmail}`);
+      // If force reset requested via environment variable, update password hash
+      if (process.env.ADMIN_FORCE_RESET_PASSWORD === 'true') {
+        await runQuery("UPDATE users SET password_hash = ?, role = 'Admin', status = 'approved' WHERE LOWER(email) = LOWER(?)", [newHash, adminEmail]);
+        console.log(`🔐 Master Admin credentials reset via ADMIN_FORCE_RESET_PASSWORD: ${adminEmail}`);
+      } else {
+        await runQuery("UPDATE users SET role = 'Admin', status = 'approved' WHERE LOWER(email) = LOWER(?)", [adminEmail]);
+        console.log(`🔐 Master Admin verified: ${adminEmail}`);
+      }
     }
 
     // Permanently remove legacy demo accounts so no one can manipulate
@@ -787,7 +793,8 @@ async function ensureRegisteredMembers() {
     await runQuery('UPDATE committees SET is_current = 1 WHERE committee_number = 2');
     await runQuery('UPDATE committees SET is_current = 0 WHERE committee_number != 2');
 
-    const defaultPasswordHash = await bcrypt.hash('@@2017JSTURC2017@@', 10);
+    const defaultMemberPass = process.env.DEFAULT_MEMBER_PASSWORD || 'MemberPass2026!';
+    const defaultPasswordHash = await bcrypt.hash(defaultMemberPass, 10);
 
     const membersToPreserve = [
       {

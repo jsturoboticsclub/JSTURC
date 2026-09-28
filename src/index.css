@@ -333,8 +333,75 @@
     -webkit-backdrop-filter: blur(16px);
     border: 1px solid rgba(255, 255, 255, 0.07);
   }
+
+  /* Cybernetic HUD Utility Classes */
+  .hud-font {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    letter-spacing: 0.05em;
+  }
+
+  .cyber-box {
+    position: relative;
+    border: 1px solid rgba(14, 165, 233, 0.25);
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(2, 6, 23, 0.98) 100%);
+  }
+
+  .cyber-box::before,
+  .cyber-box::after {
+    content: '';
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    pointer-events: none;
+  }
+
+  .cyber-box::before {
+    top: -1px;
+    left: -1px;
+    border-top: 2px solid #06b6d4;
+    border-left: 2px solid #06b6d4;
+  }
+
+  .cyber-box::after {
+    bottom: -1px;
+    right: -1px;
+    border-bottom: 2px solid #06b6d4;
+    border-right: 2px solid #06b6d4;
+  }
+
+  .neon-glow-cyan {
+    box-shadow: 0 0 15px -2px rgba(6, 182, 212, 0.35), 0 0 4px rgba(6, 182, 212, 0.6);
+  }
+
+  .neon-glow-emerald {
+    box-shadow: 0 0 15px -2px rgba(16, 185, 129, 0.35), 0 0 4px rgba(16, 185, 129, 0.6);
+  }
+
+  .neon-glow-amber {
+    box-shadow: 0 0 15px -2px rgba(245, 158, 11, 0.35), 0 0 4px rgba(245, 158, 11, 0.6);
+  }
+
+  @keyframes radar-pulse {
+    0% {
+      transform: scale(0.9);
+      opacity: 0.8;
+    }
+    50% {
+      transform: scale(1.4);
+      opacity: 0.2;
+    }
+    100% {
+      transform: scale(1.8);
+      opacity: 0;
+    }
+  }
+
+  .animate-radar-pulse {
+    animation: radar-pulse 2.2s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+  }
 }
 
 html {
   scroll-behavior: smooth;
 }
+

@@ -9,10 +9,14 @@ import {
 } from 'lucide-react';
 import JSTUHeader from '../components/JSTUHeader';
 import { fileToBase64Image } from '../utils/imageHelper';
+import { AdminConfirmModal, ConfirmModalConfig } from '../components/admin/AdminConfirmModal';
+import { AdminLayout } from '../components/admin/AdminLayout';
+import { AdminTechTreeManager } from '../components/admin/AdminTechTreeManager';
+import { AdminHardwareShowcaseManager } from '../components/admin/AdminHardwareShowcaseManager';
 
 export const AdminCMSPanel: React.FC = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'superpower' | 'committees' | 'content' | 'users' | 'projects' | 'roles' | 'announcements'>(() => {
+  const [activeTab, setActiveTab] = useState<'superpower' | 'hardware' | 'committees' | 'content' | 'users' | 'projects' | 'roles' | 'announcements' | 'techtree'>(() => {
     if (typeof window !== 'undefined') {
       if (window.location.hash.includes('cms_') || window.location.search.includes('tab=content')) {
         return 'content';
@@ -25,6 +29,34 @@ export const AdminCMSPanel: React.FC = () => {
   });
   const [loading, setLoading] = useState(true);
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Professional Guarded Confirmation Modal State
+  const [confirmModal, setConfirmModal] = useState<ConfirmModalConfig>({
+    isOpen: false,
+    title: '',
+    message: '',
+    variant: 'warning',
+    onConfirm: () => {},
+    onCancel: () => {},
+  });
+
+  const requestConfirm = (config: Partial<ConfirmModalConfig>) => {
+    setConfirmModal({
+      isOpen: true,
+      title: config.title || 'Confirm Action',
+      message: config.message || 'Are you sure you want to proceed?',
+      variant: config.variant || 'warning',
+      confirmLabel: config.confirmLabel || 'Confirm',
+      cancelLabel: config.cancelLabel || 'Cancel',
+      details: config.details || [],
+      onConfirm: () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        if (config.onConfirm) config.onConfirm();
+      },
+      onCancel: () => setConfirmModal(prev => ({ ...prev, isOpen: false })),
+    });
+  };
+
 
   const handleImageFileToBase64 = async (file: File, onSuccess: (base64: string) => void) => {
     try {
@@ -504,57 +536,97 @@ export const AdminCMSPanel: React.FC = () => {
     }
   };
 
-  // --- User Management Handlers ---
+  // --- User Management Handlers with Professional Guard Confirmation ---
   const handleUpdateRole = async (userId: number, role: 'Admin' | 'Member') => {
-    try {
-      const res = await fetch(`/api/admin/users/${userId}/role`, {
-        method: 'PUT',
-        headers: getHeaders(),
-        body: JSON.stringify({ role })
-      });
-      if (res.ok) {
-        showToast('success', `User role changed to ${role}`);
-        setUsers(users.map(u => u.id === userId ? { ...u, role } : u));
+    const targetUser = users.find(u => u.id === userId);
+    requestConfirm({
+      title: 'Change User Access Privileges',
+      message: `You are about to change the privilege level of "${targetUser?.name || 'this member'}" to "${role}". Administrative privileges grant full control to modify site content, database records, and committee rosters.`,
+      variant: role === 'Admin' ? 'warning' : 'info',
+      confirmLabel: `Change Role to ${role}`,
+      details: [
+        { label: 'Member Name', value: targetUser?.name || String(userId) },
+        { label: 'Email', value: targetUser?.email || 'N/A' },
+        { label: 'Target Privilege', value: role },
+      ],
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/admin/users/${userId}/role`, {
+            method: 'PUT',
+            headers: getHeaders(),
+            body: JSON.stringify({ role })
+          });
+          if (res.ok) {
+            showToast('success', `User role changed to ${role}`);
+            setUsers(users.map(u => u.id === userId ? { ...u, role } : u));
+          }
+        } catch (err: any) {
+          showToast('error', err.message);
+        }
       }
-    } catch (err: any) {
-      showToast('error', err.message);
-    }
+    });
   };
 
   const handleUpdateStatus = async (userId: number, status: 'approved' | 'pending' | 'rejected') => {
-    try {
-      const res = await fetch(`/api/admin/users/${userId}/status`, {
-        method: 'PUT',
-        headers: getHeaders(),
-        body: JSON.stringify({ status })
-      });
-      if (res.ok) {
-        showToast('success', `User status changed to ${status}`);
-        setUsers(users.map(u => u.id === userId ? { ...u, status } : u));
+    const targetUser = users.find(u => u.id === userId);
+    requestConfirm({
+      title: 'Update Membership Verification Status',
+      message: `Set verification status for "${targetUser?.name || 'this member'}" to "${status}"?`,
+      variant: status === 'rejected' ? 'danger' : 'info',
+      confirmLabel: `Set Status: ${status}`,
+      details: [
+        { label: 'Member Name', value: targetUser?.name || String(userId) },
+        { label: 'New Status', value: status },
+      ],
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/admin/users/${userId}/status`, {
+            method: 'PUT',
+            headers: getHeaders(),
+            body: JSON.stringify({ status })
+          });
+          if (res.ok) {
+            showToast('success', `User status changed to ${status}`);
+            setUsers(users.map(u => u.id === userId ? { ...u, status } : u));
+          }
+        } catch (err: any) {
+          showToast('error', err.message);
+        }
       }
-    } catch (err: any) {
-      showToast('error', err.message);
-    }
+    });
   };
 
   const handleDeleteUser = async (userId: number) => {
-    if (!window.confirm('Are you sure you want to permanently delete this user?')) return;
-    try {
-      const res = await fetch(`/api/admin/users/${userId}`, {
-        method: 'DELETE',
-        headers: getHeaders()
-      });
-      const data = await res.json();
-      if (res.ok) {
-        showToast('success', 'User deleted successfully');
-        setUsers(users.filter(u => u.id !== userId));
-      } else {
-        showToast('error', data.error || 'Failed to delete user');
+    const targetUser = users.find(u => u.id === userId);
+    requestConfirm({
+      title: 'Permanently Delete User Account',
+      message: `Are you sure you want to permanently delete the profile of "${targetUser?.name || 'this user'}"? All committee tenures and administrative privileges will be permanently purged. This action is irreversible.`,
+      variant: 'danger',
+      confirmLabel: 'Delete Account Permanently',
+      details: [
+        { label: 'Member Name', value: targetUser?.name || String(userId) },
+        { label: 'Student ID', value: targetUser?.student_id || 'N/A' },
+      ],
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/admin/users/${userId}`, {
+            method: 'DELETE',
+            headers: getHeaders()
+          });
+          const data = await res.json();
+          if (res.ok) {
+            showToast('success', 'User deleted successfully');
+            setUsers(users.filter(u => u.id !== userId));
+          } else {
+            showToast('error', data.error || 'Failed to delete user');
+          }
+        } catch (err: any) {
+          showToast('error', err.message);
+        }
       }
-    } catch (err: any) {
-      showToast('error', err.message);
-    }
+    });
   };
+
 
   const handleQuickUserCategoryChange = async (userId: number, category: string) => {
     try {
@@ -1082,22 +1154,23 @@ export const AdminCMSPanel: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#070B14] text-slate-900 dark:text-slate-100 transition-colors duration-300 flex flex-col selection:bg-indigo-500 selection:text-white">
-      <JSTUHeader currentUser={currentUser} />
-
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-10">
-        
+    <AdminLayout
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      currentUser={currentUser}
+    >
+      <div className="space-y-6">
         {/* Top Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 pb-6 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-200 dark:border-slate-800">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="px-3 py-1 rounded-full text-xs font-black bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-xs flex items-center gap-1.5 uppercase tracking-wider">
+              <span className="px-3 py-1 rounded-full text-xs font-black bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 shadow-xs flex items-center gap-1.5 uppercase tracking-wider">
                 <ShieldCheck className="w-4 h-4" />
                 Admin Superpower CMS
               </span>
-              <span className="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">JSTU Full Control Matrix</span>
+              <span className="text-xs font-mono font-semibold text-slate-500 dark:text-slate-400">JSTU Universal Control Matrix</span>
             </div>
-            <h1 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
               Dynamic Site & System Manager
             </h1>
           </div>
@@ -1105,10 +1178,11 @@ export const AdminCMSPanel: React.FC = () => {
           <div className="flex items-center gap-3">
             <Link
               to="/"
-              className="px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold border border-slate-200 dark:border-slate-700 transition-all flex items-center gap-1.5 shadow-xs"
+              target="_blank"
+              className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold border border-slate-200 dark:border-slate-700 transition-all flex items-center gap-1.5 shadow-xs"
             >
               <Globe className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-              <span>View Live Website</span>
+              <span>Live Website</span>
             </Link>
           </div>
         </div>
@@ -1127,217 +1201,7 @@ export const AdminCMSPanel: React.FC = () => {
           </div>
         )}
 
-        {/* DYNAMIC MOBILE TAB NAVIGATION (md:hidden) - Zero horizontal scrolling needed */}
-        <div className="md:hidden mb-6 space-y-2.5">
-          <div className="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400 px-1">
-            <span className="uppercase tracking-wider">Select Admin Section</span>
-            <span className="text-[11px] font-mono text-amber-600 dark:text-amber-400">All 6 Visible</span>
-          </div>
-
-          {/* Quick Dropdown Selector */}
-          <div className="relative">
-            <select
-              value={activeTab}
-              onChange={(e) => setActiveTab(e.target.value as any)}
-              className="w-full px-4 py-3 rounded-2xl bg-white dark:bg-[#0D1424] border-2 border-indigo-500/50 dark:border-indigo-400/50 text-slate-900 dark:text-white text-sm font-black shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="superpower">👑 Superpower Settings</option>
-              <option value="committees">🏛️ Committees & Tenures ({committees.length})</option>
-              <option value="content">📄 Landing Page Text CMS</option>
-              <option value="users">👥 User Registry ({users.length})</option>
-              <option value="projects">🚀 Projects CMS ({projects.length}){proposals.length > 0 ? ` [${proposals.length} Pending]` : ''}</option>
-              <option value="roles">🏷️ Directory Roles ({roles.length})</option>
-              <option value="announcements">🔔 Announcements ({announcements.length})</option>
-            </select>
-          </div>
-
-          {/* 2-Column Touch Grid - Immediate tap access to every tab */}
-          <div className="grid grid-cols-2 gap-2 p-1.5 bg-white dark:bg-[#0D1424] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-            <button
-              onClick={() => setActiveTab('superpower')}
-              className={`p-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 text-left ${
-                activeTab === 'superpower'
-                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 shadow-md font-black'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60'
-              }`}
-            >
-              <Sparkles className="w-4 h-4 flex-shrink-0 text-amber-400" />
-              <span className="truncate">👑 Superpower</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('committees')}
-              className={`p-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 text-left ${
-                activeTab === 'committees'
-                  ? 'bg-indigo-600 text-white shadow-md'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60'
-              }`}
-            >
-              <Landmark className="w-4 h-4 flex-shrink-0 text-indigo-400" />
-              <span className="truncate">Committees ({committees.length})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('content')}
-              className={`p-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 text-left ${
-                activeTab === 'content'
-                  ? 'bg-indigo-600 text-white shadow-md'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60'
-              }`}
-            >
-              <FileText className="w-4 h-4 flex-shrink-0 text-indigo-400" />
-              <span className="truncate">Landing CMS</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('users')}
-              className={`p-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 text-left ${
-                activeTab === 'users'
-                  ? 'bg-indigo-600 text-white shadow-md'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60'
-              }`}
-            >
-              <Users className="w-4 h-4 flex-shrink-0 text-indigo-400" />
-              <span className="truncate">Users ({users.length})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('projects')}
-              className={`p-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between gap-1 text-left ${
-                activeTab === 'projects'
-                  ? 'bg-indigo-600 text-white shadow-md'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60'
-              }`}
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <Layers className="w-4 h-4 flex-shrink-0 text-indigo-400" />
-                <span className="truncate">Projects ({projects.length})</span>
-              </div>
-              {proposals.length > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-slate-950 flex-shrink-0 animate-pulse">
-                  {proposals.length}
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => setActiveTab('roles')}
-              className={`p-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 text-left ${
-                activeTab === 'roles'
-                  ? 'bg-indigo-600 text-white shadow-md'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60'
-              }`}
-            >
-              <Tag className="w-4 h-4 flex-shrink-0 text-indigo-400" />
-              <span className="truncate">Roles ({roles.length})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('announcements')}
-              className={`p-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 text-left col-span-2 ${
-                activeTab === 'announcements'
-                  ? 'bg-indigo-600 text-white shadow-md'
-                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/60'
-              }`}
-            >
-              <Bell className="w-4 h-4 flex-shrink-0 text-indigo-400" />
-              <span className="truncate">Notices & Announcements ({announcements.length})</span>
-            </button>
-          </div>
-        </div>
-
-        {/* DESKTOP TAB NAVIGATION (hidden md:flex) */}
-        <div className="hidden md:flex overflow-x-auto no-scrollbar scroll-smooth gap-2 mb-8 p-1.5 bg-white dark:bg-[#0D1424] rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm w-full">
-          <button
-            onClick={() => setActiveTab('superpower')}
-            className={`px-4 py-2 rounded-xl text-sm font-black whitespace-nowrap flex-shrink-0 transition-all flex items-center gap-2 ${
-              activeTab === 'superpower'
-                ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <Sparkles className="w-4 h-4" />
-            <span>👑 Superpower Settings</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('committees')}
-            className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap flex-shrink-0 transition-all flex items-center gap-2 ${
-              activeTab === 'committees'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <Landmark className="w-4 h-4" />
-            <span>Committees & Tenures ({committees.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('content')}
-            className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap flex-shrink-0 transition-all flex items-center gap-2 ${
-              activeTab === 'content'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <FileText className="w-4 h-4" />
-            <span>Landing Page Text</span>
-          </button>
-
-
-          <button
-            onClick={() => setActiveTab('users')}
-            className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap flex-shrink-0 transition-all flex items-center gap-2 ${
-              activeTab === 'users'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>User Registry ({users.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('projects')}
-            className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap flex-shrink-0 transition-all flex items-center gap-2 ${
-              activeTab === 'projects'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <Layers className="w-4 h-4" />
-            <span>Projects CMS ({projects.length})</span>
-            {proposals.length > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-amber-400 text-slate-950 animate-pulse">
-                {proposals.length}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('roles')}
-            className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap flex-shrink-0 transition-all flex items-center gap-2 ${
-              activeTab === 'roles'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <Tag className="w-4 h-4" />
-            <span>Directory Roles</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('announcements')}
-            className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap flex-shrink-0 transition-all flex items-center gap-2 ${
-              activeTab === 'announcements'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
-          >
-            <Bell className="w-4 h-4" />
-            <span>Announcements</span>
-          </button>
-        </div>
+        {/* Redundant tab buttons removed in favor of sticky sidebar */}
 
         {/* TAB 0: SUPERPOWER SETTINGS */}
         {activeTab === 'superpower' && (
@@ -4963,9 +4827,21 @@ export const AdminCMSPanel: React.FC = () => {
             </div>
           </div>
         )}
-      </main>
-    </div>
+
+        {activeTab === 'hardware' && (
+          <AdminHardwareShowcaseManager />
+        )}
+
+        {activeTab === 'techtree' && (
+          <AdminTechTreeManager />
+        )}
+
+        {/* Global Professional Guard Confirmation Modal */}
+        <AdminConfirmModal {...confirmModal} />
+      </div>
+    </AdminLayout>
   );
 };
 
 export default AdminCMSPanel;
+

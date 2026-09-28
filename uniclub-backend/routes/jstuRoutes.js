@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { runQuery, getQuery, allQuery, inferMemberCategory } = require('../db');
 const CloudinaryService = require('../services/CloudinaryService');
+const emailService = require('../services/EmailService');
 
 async function maybeUploadToCloudinary(imageStr, folder = 'jstu_robotics/general', publicId = null) {
   if (!imageStr || typeof imageStr !== 'string') return imageStr;
@@ -875,7 +876,7 @@ router.post('/auth/register', async (req, res) => {
   }
 });
 
-// POST /api/auth/forgot-password: Generate password recovery code
+// POST /api/auth/forgot-password: Generate password recovery code & dispatch via email
 router.post('/auth/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
@@ -888,7 +889,7 @@ router.post('/auth/forgot-password', async (req, res) => {
       return res.status(404).json({ error: 'No account registered with this email address' });
     }
 
-    // Generate a 6-digit recovery code
+    // Generate a secure 6-digit recovery code
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     // Expiration: 15 minutes from now
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
@@ -898,11 +899,28 @@ router.post('/auth/forgot-password', async (req, res) => {
       [user.email, code, expiresAt]
     );
 
-    res.json({
-      success: true,
-      message: 'Password recovery code generated successfully! Enter this code below to set a new password.',
-      reset_code: code // Provided for instant self-service recovery in interface
-    });
+    // Send real email via EmailService
+    const emailResult = await emailService.sendPasswordResetCode(user.email, user.name, code);
+
+    if (emailResult.sent) {
+      return res.json({
+        success: true,
+        email_sent: true,
+        message: `A password recovery verification code has been dispatched to ${user.email}. Please check your inbox and spam folder.`
+      });
+    } else {
+      console.warn(`[AUTH_RECOVERY] Email dispatch failed for ${user.email}: ${emailResult.error || emailResult.reason}`);
+      if (emailResult.reason === 'SMTP_NOT_CONFIGURED') {
+        return res.status(503).json({
+          success: false,
+          error: 'Email delivery service is not configured yet on the server. Please contact the club administrator to configure SMTP credentials in .env.'
+        });
+      }
+      return res.status(502).json({
+        success: false,
+        error: `Failed to deliver recovery email: ${emailResult.error || 'Connection error'}. Please try again or contact the administrator.`
+      });
+    }
   } catch (err) {
     console.error('Forgot password error:', err);
     res.status(500).json({ error: 'Failed to process password recovery request' });
@@ -910,14 +928,17 @@ router.post('/auth/forgot-password', async (req, res) => {
 });
 
 // POST /api/auth/reset-password: Verify code and update password
-router.post('/api/auth/reset-password', async (req, res) => {
+router.post(['/auth/reset-password', '/api/auth/reset-password'], async (req, res) => {
   try {
-    const { email, code, new_password } = req.body;
-    if (!email || !code || !new_password) {
+    const emailVal = req.body.email;
+    const codeVal = req.body.code;
+    const newPasswordVal = req.body.new_password || req.body.newPassword;
+
+    if (!emailVal || !codeVal || !newPasswordVal) {
       return res.status(400).json({ error: 'Email, recovery code, and new password are required' });
     }
 
-    if (new_password.length < 6) {
+    if (newPasswordVal.length < 6) {
       return res.status(400).json({ error: 'New password must be at least 6 characters long' });
     }
 
@@ -925,7 +946,7 @@ router.post('/api/auth/reset-password', async (req, res) => {
       `SELECT * FROM password_resets 
        WHERE LOWER(email) = LOWER(?) AND code = ? AND used = 0
        ORDER BY id DESC LIMIT 1`,
-      [email.trim(), code.trim()]
+      [emailVal.trim(), codeVal.trim()]
     );
 
     if (!resetRecord) {
@@ -938,10 +959,10 @@ router.post('/api/auth/reset-password', async (req, res) => {
 
     // Hash new password
     const salt = await bcrypt.genSalt(10);
-    const newHash = await bcrypt.hash(new_password, salt);
+    const newHash = await bcrypt.hash(newPasswordVal, salt);
 
     // Update user password
-    await runQuery('UPDATE users SET password_hash = ? WHERE LOWER(email) = LOWER(?)', [newHash, email.trim()]);
+    await runQuery('UPDATE users SET password_hash = ? WHERE LOWER(email) = LOWER(?)', [newHash, emailVal.trim()]);
 
     // Mark reset record as used
     await runQuery('UPDATE password_resets SET used = 1 WHERE id = ?', [resetRecord.id]);

@@ -13,10 +13,12 @@ function Kill-Port {
     
     $connection = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
     if ($connection) {
-        $processPid = $connection.OwningProcess
-        Write-Host "  [!] Found existing $ServerName on port $Port (PID: $processPid)" -ForegroundColor Yellow
+        $processPids = @($connection | Select-Object -ExpandProperty OwningProcess -Unique)
+        Write-Host "  [!] Found existing $ServerName on port $Port (PID(s): $($processPids -join ', '))" -ForegroundColor Yellow
         Write-Host "  [~] Stopping old process..." -ForegroundColor Yellow
-        Stop-Process -Id $processPid -Force -ErrorAction SilentlyContinue
+        foreach ($pidToKill in $processPids) {
+            Stop-Process -Id $pidToKill -Force -ErrorAction SilentlyContinue
+        }
         Start-Sleep -Seconds 1
         Write-Host "  [OK] Old $ServerName stopped" -ForegroundColor Green
     } else {

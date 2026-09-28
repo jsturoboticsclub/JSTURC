@@ -1,9 +1,15 @@
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const sqlite3 = require('sqlite3').verbose();
 const { createClient } = require('@libsql/client');
-const path = require('path');
 
-const TURSO_URL = 'libsql://jstu-robotics-jsturoboticsclub.aws-ap-south-1.turso.io';
-const TURSO_AUTH_TOKEN = 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3OTA0MDc5OTAsImlkIjoiMDFhMGRjYTEtYjEwMS03ZTNkLThlMjctYTdmNzQwOTZkZmQyIiwia2lkIjoiWVg2ZW5yX05hdndLLWg2a0FyaHB5NGlHSFRZaHRoQXZnOTRQZXZiWTFsRSIsInJpZCI6ImM2N2JjY2EzLTY4NjctNDZiYS1iZjVmLWU4Y2NiMzBmODFkMyJ9.WXL3HNaaU-WHyk9TvfdOBaQ2oHHlFG2y1nALZVLxldmJLwH--Iu4eYot2YMWJeUy0d2c_BUKg70sGDphIVfEDA';
+const TURSO_URL = process.env.TURSO_DATABASE_URL || process.env.TURSO_URL;
+const TURSO_AUTH_TOKEN = process.env.TURSO_AUTH_TOKEN;
+
+if (!TURSO_URL || !TURSO_AUTH_TOKEN) {
+  console.error('❌ Error: TURSO_DATABASE_URL and TURSO_AUTH_TOKEN must be defined in your .env file.');
+  process.exit(1);
+}
 
 const turso = createClient({
   url: TURSO_URL,

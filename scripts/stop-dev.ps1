@@ -13,9 +13,11 @@ $stopped = $false
 Write-Host "Checking backend server (port 5000)..." -ForegroundColor Yellow
 $backend = Get-NetTCPConnection -LocalPort 5000 -ErrorAction SilentlyContinue
 if ($backend) {
-    $backendPid = $backend.OwningProcess
-    Write-Host "  [~] Stopping backend (PID: $backendPid)..." -ForegroundColor Yellow
-    Stop-Process -Id $backendPid -Force -ErrorAction SilentlyContinue
+    $backendPids = @($backend | Select-Object -ExpandProperty OwningProcess -Unique)
+    Write-Host "  [~] Stopping backend (PID(s): $($backendPids -join ', '))..." -ForegroundColor Yellow
+    foreach ($p in $backendPids) {
+        Stop-Process -Id $p -Force -ErrorAction SilentlyContinue
+    }
     Start-Sleep -Seconds 1
     Write-Host "  [OK] Backend server stopped" -ForegroundColor Green
     $stopped = $true
@@ -28,9 +30,11 @@ Write-Host ""
 Write-Host "Checking frontend server (port 8081)..." -ForegroundColor Yellow
 $frontend = Get-NetTCPConnection -LocalPort 8081 -ErrorAction SilentlyContinue
 if ($frontend) {
-    $frontendPid = $frontend.OwningProcess
-    Write-Host "  [~] Stopping frontend (PID: $frontendPid)..." -ForegroundColor Yellow
-    Stop-Process -Id $frontendPid -Force -ErrorAction SilentlyContinue
+    $frontendPids = @($frontend | Select-Object -ExpandProperty OwningProcess -Unique)
+    Write-Host "  [~] Stopping frontend (PID(s): $($frontendPids -join ', '))..." -ForegroundColor Yellow
+    foreach ($p in $frontendPids) {
+        Stop-Process -Id $p -Force -ErrorAction SilentlyContinue
+    }
     Start-Sleep -Seconds 1
     Write-Host "  [OK] Frontend server stopped" -ForegroundColor Green
     $stopped = $true

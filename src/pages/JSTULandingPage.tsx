@@ -11,6 +11,10 @@ import JSTUHeader from '../components/JSTUHeader';
 import ScrollReveal from '../components/ScrollReveal';
 import AnimatedCounter from '../components/AnimatedCounter';
 import { SkeletonHero } from '../components/SkeletonLoader';
+import { TelemetryBar } from '../components/telemetry/TelemetryBar';
+import { TechTree } from '../components/techtree/TechTree';
+import { ProjectDetailModal, ProjectDetail } from '../components/projects/ProjectDetailModal';
+import { HardwareShowcase } from '../components/showcase/HardwareShowcase';
 
 export const JSTULandingPage: React.FC = () => {
   const location = useLocation();
@@ -23,6 +27,8 @@ export const JSTULandingPage: React.FC = () => {
   const [currentCommittee, setCurrentCommittee] = useState<any>(null);
   const [selectedCommitteeId, setSelectedCommitteeId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [inspectingProject, setInspectingProject] = useState<ProjectDetail | null>(null);
+
 
   // Directory filter & search
   const [selectedRole, setSelectedRole] = useState('All');
@@ -441,6 +447,10 @@ export const JSTULandingPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* REAL-TIME ROBOTICS TELEMETRY & LAB STATUS TICKER */}
+      <TelemetryBar />
+
 
       {/* FLOATING ACTION BUTTON FOR ADMIN (Quick In-Page Superpower Drawer) */}
       {currentUser?.role === 'Admin' && (
@@ -894,8 +904,14 @@ export const JSTULandingPage: React.FC = () => {
             </div>
           </ScrollReveal>
 
+          {/* INTERACTIVE MULTI-ITEM ROBOTIC HARDWARE SHOWCASE */}
+          <ScrollReveal animation="fade-up" delay={0.28}>
+            <HardwareShowcase />
+          </ScrollReveal>
+
           {/* Dynamic Stats Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 max-w-5xl mx-auto">
+
             {statsList.map((stat: any, index: number) => (
               <ScrollReveal key={index} animation="fade-up" delay={0.15 + index * 0.07}>
                 <div
@@ -1009,8 +1025,18 @@ export const JSTULandingPage: React.FC = () => {
         </section>
       )}
 
+      {/* INTERACTIVE ROBOTICS CURRICULUM TECH TREE */}
+      <section id="techtree" className="py-20 bg-slate-100/70 dark:bg-[#070B14] border-b border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 transition-colors duration-300">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <ScrollReveal animation="fade-up">
+            <TechTree />
+          </ScrollReveal>
+        </div>
+      </section>
+
       {/* FEATURED PROJECTS SHOWCASE */}
       {siteConfig.sections?.projects?.show !== false && (
+
         <section id="projects" className="py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <ScrollReveal animation="fade-up">
             <div className="flex flex-col md:flex-row md:items-end justify-between mb-8">
@@ -1095,26 +1121,48 @@ export const JSTULandingPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                    <div className="text-xs text-slate-500 dark:text-slate-400">
+                  <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
+                    <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
                       <span className="font-bold text-slate-700 dark:text-slate-300">Engineers: </span>
                       {p.team_members ? p.team_members.join(', ') : 'JSTU Core Team'}
                     </div>
-                    {p.github_link && (
-                      <a
-                        href={p.github_link}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-600 dark:text-slate-300 transition-colors shadow-xs"
-                        title="View GitHub Repository"
+
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => setInspectingProject({
+                          id: p.id,
+                          title: p.title,
+                          category: p.category,
+                          description: p.description,
+                          image: p.image_url,
+                          githubUrl: p.github_link,
+                          status: p.status,
+                          tags: p.tech_stack,
+                        })}
+                        className="px-3 py-1.5 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 font-mono text-xs flex items-center gap-1.5 transition-colors font-bold shadow-xs"
                       >
-                        <Github className="w-4 h-4" />
-                      </a>
-                    )}
+                        <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+                        <span className="hidden sm:inline">Inspect Architecture</span>
+                        <span className="sm:hidden inline">Specs</span>
+                      </button>
+
+                      {p.github_link && (
+                        <a
+                          href={p.github_link}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-indigo-600 hover:text-white text-slate-600 dark:text-slate-300 transition-colors shadow-xs"
+                          title="View GitHub Repository"
+                        >
+                          <Github className="w-4 h-4" />
+                        </a>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
             </ScrollReveal>
+
             ))}
           </div>
         </section>
@@ -1516,8 +1564,15 @@ export const JSTULandingPage: React.FC = () => {
           </div>
         </ScrollReveal>
       </footer>
+
+      {/* PROJECT DEEP DIVE ARCHITECTURE MODAL */}
+      <ProjectDetailModal
+        project={inspectingProject}
+        onClose={() => setInspectingProject(null)}
+      />
     </div>
   );
 };
 
 export default JSTULandingPage;
+

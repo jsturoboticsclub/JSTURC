@@ -5,6 +5,7 @@ import {
   ArrowRight, LayoutDashboard, Sun, Moon, Sparkles, Layers, ChevronRight 
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { AdminConfirmModal } from './admin/AdminConfirmModal';
 
 interface JSTUHeaderProps {
   currentUser?: any;
@@ -45,11 +46,18 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
     }
   }, [branding]);
 
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
   const handleLogout = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const executeLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     localStorage.removeItem('authUser');
     if (onLogout) onLogout();
+    setShowLogoutConfirm(false);
     navigate('/');
     window.location.reload();
   };
@@ -126,8 +134,8 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
     { id: 'home', label: 'Home', sectionId: 'home', route: '/' },
     { id: 'agenda', label: 'About & Agenda', sectionId: 'agenda' },
     { id: 'projects', label: 'Projects', sectionId: 'projects' },
-    { id: 'committees', label: 'Committees', route: '/committees' },
     { id: 'directory', label: 'Member Directory', sectionId: 'directory' },
+    { id: 'committees', label: 'Committees', route: '/committees' },
   ];
 
   const handleNavClick = (e: React.MouseEvent, link: any) => {
@@ -490,6 +498,22 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
           </div>
         </div>
       )}
+
+      {/* Universal Logout Confirmation Guard */}
+      <AdminConfirmModal
+        isOpen={showLogoutConfirm}
+        title="Confirm Secure Sign Out"
+        message="Are you sure you want to terminate your active session and sign out of the robotics club portal?"
+        confirmLabel="Sign Out"
+        cancelLabel="Stay Signed In"
+        variant="warning"
+        details={[
+          { label: 'Active User', value: currentUser?.name || 'Authorized Member' },
+          { label: 'Role Privileges', value: currentUser?.role || 'Member' }
+        ]}
+        onConfirm={executeLogout}
+        onCancel={() => setShowLogoutConfirm(false)}
+      />
     </header>
   );
 };

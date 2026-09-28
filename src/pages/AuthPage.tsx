@@ -19,7 +19,6 @@ export const AuthPage: React.FC = () => {
   const [recoveryStep, setRecoveryStep] = useState<1 | 2>(1);
   const [resetCode, setResetCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [serverHintCode, setServerHintCode] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -253,11 +252,7 @@ export const AuthPage: React.FC = () => {
         throw new Error(data.error || 'Failed to request reset code');
       }
 
-      setSuccess(data.message || 'Recovery code generated! Please enter it below to set a new password.');
-      if (data.code) {
-        setServerHintCode(data.code);
-        setResetCode(data.code); // prefill for testing convenience
-      }
+      setSuccess(data.message || 'A 6-digit verification recovery code has been sent to your email. Please check your inbox.');
       setRecoveryStep(2);
     } catch (err: any) {
       setError(err.message);
@@ -561,11 +556,6 @@ export const AuthPage: React.FC = () => {
                 </form>
               ) : (
                 <form onSubmit={handleResetPassword} className="space-y-4">
-                  {serverHintCode && (
-                    <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-[11px] text-indigo-700 dark:text-indigo-300 font-mono text-center font-bold">
-                      🔑 Generated Recovery Code: <span className="text-amber-500 font-black text-sm">{serverHintCode}</span>
-                    </div>
-                  )}
 
                   <div>
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wide">
