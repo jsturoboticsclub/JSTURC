@@ -72,6 +72,7 @@ export const MemberDashboard: React.FC = () => {
         bio: p?.bio || '',
         profile_photo: p?.profile_photo || '',
         cover_photo: p?.cover_photo || '',
+        cover_position: p?.cover_position != null ? Number(p.cover_position) : 50,
         skillsString: Array.isArray(p?.skills) ? p.skills.join(', ') : '',
         research_interests: Array.isArray(p?.research_interests) ? p.research_interests : [],
         achievements: Array.isArray(p?.achievements) ? p.achievements : [],
@@ -92,6 +93,7 @@ export const MemberDashboard: React.FC = () => {
         bio: '',
         profile_photo: '',
         cover_photo: '',
+        cover_position: 50,
         skillsString: '',
         research_interests: [] as string[],
         achievements: [] as Array<{ title: string; year: string; issuer: string; link?: string }>,
@@ -262,6 +264,7 @@ export const MemberDashboard: React.FC = () => {
           bio: p.bio || '',
           profile_photo: p.profile_photo || '',
           cover_photo: p.cover_photo || '',
+          cover_position: p.cover_position != null ? Number(p.cover_position) : 50,
           skillsString: Array.isArray(p.skills) ? p.skills.join(', ') : '',
           research_interests: Array.isArray(p.research_interests) ? p.research_interests : [],
           achievements: Array.isArray(p.achievements) ? p.achievements : [],
@@ -387,6 +390,7 @@ export const MemberDashboard: React.FC = () => {
           bio: formData.bio,
           profile_photo: formData.profile_photo,
           cover_photo: formData.cover_photo,
+          cover_position: formData.cover_position,
           skills: skillsArray,
           research_interests: formData.research_interests,
           achievements: formData.achievements,
@@ -1290,23 +1294,75 @@ export const MemberDashboard: React.FC = () => {
                     {imageError && <p className="text-[10px] text-red-500 font-bold mt-1">{imageError}</p>}
                   </div>
 
-                  {/* Cover Banner Upload */}
+                   {/* Cover Banner Upload & Reposition */}
                   <div>
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wide">
                       Profile Cover Banner
                     </label>
-                    <div className="flex items-center gap-3">
-                      {formData.cover_photo ? (
+
+                    {/* Widescreen interactive preview */}
+                    {formData.cover_photo ? (
+                      <div className="relative w-full rounded-2xl overflow-hidden mb-3" style={{ aspectRatio: '16/5' }}>
                         <img
                           src={formData.cover_photo}
                           alt="Cover Preview"
-                          className="w-24 h-14 rounded-2xl object-cover border border-slate-300 dark:border-slate-700 shadow-sm flex-shrink-0"
+                          className="w-full h-full object-cover select-none"
+                          style={{ objectPosition: `center ${formData.cover_position}%` }}
+                          draggable={false}
                         />
-                      ) : (
-                        <div className="w-24 h-14 rounded-2xl bg-slate-200 dark:bg-slate-800 border border-dashed border-slate-400 flex items-center justify-center text-slate-400 flex-shrink-0">
-                          <ImageIcon className="w-6 h-6" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent pointer-events-none rounded-2xl" />
+                        <div className="absolute bottom-2 left-3 flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-cyan-300 font-mono text-[11px] font-bold border border-white/10">
+                            Position: {formData.cover_position}%
+                          </span>
                         </div>
-                      )}
+                        <div className="absolute top-2 right-2 px-2 py-1 rounded-xl bg-black/50 backdrop-blur-md text-white text-[10px] font-bold border border-white/10">
+                          👁 Preview (16:5)
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="w-full rounded-2xl bg-slate-200 dark:bg-slate-800 border border-dashed border-slate-400 flex items-center justify-center text-slate-400 mb-3" style={{ aspectRatio: '16/5' }}>
+                        <div className="flex flex-col items-center gap-1">
+                          <ImageIcon className="w-8 h-8 opacity-40" />
+                          <span className="text-[11px]">No cover photo yet</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Vertical position slider */}
+                    {formData.cover_photo && (
+                      <div className="mb-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Vertical Position</span>
+                          <div className="flex gap-1.5">
+                            {[['Top', 10], ['Center', 50], ['Bottom', 90]].map(([label, val]) => (
+                              <button
+                                key={label as string}
+                                type="button"
+                                onClick={() => setFormData(prev => ({ ...prev, cover_position: val as number }))}
+                                className={`px-2 py-0.5 rounded-lg text-[11px] font-bold transition-all ${
+                                  Math.abs(formData.cover_position - (val as number)) < 15
+                                    ? 'bg-indigo-600 text-white'
+                                    : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50'
+                                }`}
+                              >{label as string}</button>
+                            ))}
+                          </div>
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          value={formData.cover_position}
+                          onChange={e => setFormData(prev => ({ ...prev, cover_position: Number(e.target.value) }))}
+                          className="w-full h-1.5 rounded-full accent-indigo-600 cursor-pointer"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-1">0% = top of image · 100% = bottom · Saved with your profile</p>
+                      </div>
+                    )}
+
+                    {/* Upload button */}
+                    <div className="flex items-center gap-3">
                       <div className="flex-1 min-w-0">
                         <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700 transition-all shadow-xs">
                           <Upload className="w-3.5 h-3.5 text-cyan-500" />

@@ -113,6 +113,7 @@ async function initDatabase() {
       research_interests TEXT,
       achievements TEXT,
       cover_photo TEXT,
+      cover_position INTEGER DEFAULT 50,
       committee_category TEXT DEFAULT 'Auto',
       committee_id INTEGER DEFAULT 1,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -196,6 +197,7 @@ async function initDatabase() {
       bio TEXT,
       skills TEXT,
       social_links TEXT,
+      cover_position INTEGER DEFAULT 50,
       display_order INTEGER DEFAULT 10,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`,
@@ -263,6 +265,8 @@ async function initDatabase() {
   try { await runQuery(`ALTER TABLE users ADD COLUMN username TEXT`); } catch (e) { }
   try { await runQuery(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL`); } catch (e) { }
   try { await runQuery(`ALTER TABLE committee_members ADD COLUMN headline TEXT`); } catch (e) { }
+  try { await runQuery(`ALTER TABLE users ADD COLUMN cover_position INTEGER DEFAULT 50`); } catch (e) { }
+  try { await runQuery(`ALTER TABLE committee_members ADD COLUMN cover_position INTEGER DEFAULT 50`); } catch (e) { }
 
   await seedInitialData();
   await ensureMasterAdmin();

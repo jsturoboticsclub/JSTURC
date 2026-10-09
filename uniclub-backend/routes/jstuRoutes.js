@@ -491,7 +491,7 @@ router.get('/members/:id', async (req, res) => {
     member = await getQuery(
       `SELECT u.id, u.username, u.name, u.email, u.role, u.status, u.committee_role, u.department, u.student_id,
               u.bio, u.skills, u.profile_photo, u.contact_links, u.project_contributions,
-              u.headline, u.research_interests, u.achievements, u.cover_photo, u.created_at,
+              u.headline, u.research_interests, u.achievements, u.cover_photo, u.cover_position, u.created_at,
               cm.designation as cm_designation, cm.category as cm_category, cm.headline as cm_headline
        FROM users u
        LEFT JOIN committee_members cm ON (cm.user_id = u.id OR (cm.email IS NOT NULL AND cm.email != '' AND LOWER(cm.email) = LOWER(u.email)))
@@ -509,7 +509,7 @@ router.get('/members/:id', async (req, res) => {
       member = await getQuery(
         `SELECT u.id, u.username, u.name, u.email, u.role, u.status, u.committee_role, u.department, u.student_id,
                 u.bio, u.skills, u.profile_photo, u.contact_links, u.project_contributions,
-                u.headline, u.research_interests, u.achievements, u.cover_photo, u.created_at,
+                u.headline, u.research_interests, u.achievements, u.cover_photo, u.cover_position, u.created_at,
                 cm.designation as cm_designation, cm.category as cm_category, cm.headline as cm_headline
          FROM users u
          LEFT JOIN committee_members cm ON (cm.user_id = u.id OR (cm.email IS NOT NULL AND cm.email != '' AND LOWER(cm.email) = LOWER(u.email)))
@@ -531,6 +531,7 @@ router.get('/members/:id', async (req, res) => {
                 u.contact_links as user_links, u.project_contributions as user_projects,
                 u.headline as user_headline, u.research_interests as user_research,
                 u.achievements as user_achievements, u.cover_photo as user_cover,
+                u.cover_position as user_cover_pos, cm.cover_position as cm_cover_pos,
                 u.name as user_actual_name, u.department as user_dept, u.student_id as user_student_id
          FROM committee_members cm
          LEFT JOIN users u ON (cm.user_id = u.id OR (cm.email IS NOT NULL AND cm.email != '' AND LOWER(cm.email) = LOWER(u.email)))
@@ -558,6 +559,7 @@ router.get('/members/:id', async (req, res) => {
           research_interests: cm.user_research || '[]',
           achievements: cm.user_achievements || '[]',
           cover_photo: cm.user_cover || '',
+          cover_position: cm.cm_cover_pos != null ? cm.cm_cover_pos : (cm.user_cover_pos != null ? cm.user_cover_pos : 50),
           created_at: cm.created_at
         };
       }
@@ -568,7 +570,7 @@ router.get('/members/:id', async (req, res) => {
       member = await getQuery(
         `SELECT u.id, u.username, u.name, u.email, u.role, u.status, u.committee_role, u.department, u.student_id,
                 u.bio, u.skills, u.profile_photo, u.contact_links, u.project_contributions,
-                u.headline, u.research_interests, u.achievements, u.cover_photo, u.created_at,
+                u.headline, u.research_interests, u.achievements, u.cover_photo, u.cover_position, u.created_at,
                 cm.designation as cm_designation, cm.headline as cm_headline
          FROM users u
          LEFT JOIN committee_members cm ON (cm.user_id = u.id OR (cm.email IS NOT NULL AND cm.email != '' AND LOWER(cm.email) = LOWER(u.email)))
@@ -589,6 +591,7 @@ router.get('/members/:id', async (req, res) => {
                 u.contact_links as user_links, u.project_contributions as user_projects,
                 u.headline as user_headline, u.research_interests as user_research,
                 u.achievements as user_achievements, u.cover_photo as user_cover,
+                u.cover_position as user_cover_pos, cm.cover_position as cm_cover_pos,
                 u.name as user_actual_name, u.department as user_dept, u.student_id as user_student_id
          FROM committee_members cm
          LEFT JOIN users u ON (cm.user_id = u.id OR (cm.email IS NOT NULL AND cm.email != '' AND LOWER(cm.email) = LOWER(u.email)))
@@ -615,6 +618,7 @@ router.get('/members/:id', async (req, res) => {
           research_interests: cm.user_research || '[]',
           achievements: cm.user_achievements || '[]',
           cover_photo: cm.user_cover || '',
+          cover_position: cm.cm_cover_pos != null ? cm.cm_cover_pos : (cm.user_cover_pos != null ? cm.user_cover_pos : 50),
           created_at: cm.created_at
         };
       }
@@ -664,6 +668,7 @@ router.get('/members/:id', async (req, res) => {
         achievements,
         headline: member.headline || member.committee_role || 'Robotics Club Member',
         cover_photo: member.cover_photo || '',
+        cover_position: member.cover_position != null ? Number(member.cover_position) : 50,
         committee_history
       }
     });
@@ -1169,7 +1174,7 @@ router.get('/auth/me', authenticate, async (req, res) => {
 router.get('/member/dashboard', authenticate, async (req, res) => {
   try {
     const user = await getQuery(
-      'SELECT id, username, name, email, role, status, committee_role, department, student_id, bio, skills, profile_photo, contact_links, project_contributions, headline, research_interests, achievements, cover_photo FROM users WHERE id = ?',
+      'SELECT id, username, name, email, role, status, committee_role, department, student_id, bio, skills, profile_photo, contact_links, project_contributions, headline, research_interests, achievements, cover_photo, cover_position FROM users WHERE id = ?',
       [req.user.id]
     );
 
@@ -1212,7 +1217,8 @@ router.get('/member/dashboard', authenticate, async (req, res) => {
           research_interests,
           achievements,
           headline: user.headline || '',
-          cover_photo: user.cover_photo || ''
+          cover_photo: user.cover_photo || '',
+          cover_position: user.cover_position != null ? Number(user.cover_position) : 50
         },
         announcements,
         activeProjects: projects,
@@ -1281,13 +1287,21 @@ router.get('/member/project-proposals', authenticate, async (req, res) => {
   }
 });
 
-// PUT /api/member/profile: Member updates their own profile (including username, cover photo, headline)
+// PUT /api/member/profile: Member updates their own profile (including username, cover photo, cover position, headline)
 router.put('/member/profile', authenticate, async (req, res) => {
   try {
-    const { name, bio, skills, profile_photo, contact_links, department, student_id, headline, research_interests, achievements, cover_photo, username } = req.body;
+    const { name, bio, skills, profile_photo, contact_links, department, student_id, headline, research_interests, achievements, cover_photo, cover_position, username } = req.body;
     const userId = req.user.id;
     let cleanPhoto = (profile_photo && typeof profile_photo === 'string' && profile_photo.trim()) ? profile_photo.trim() : null;
     let cleanCover = (cover_photo && typeof cover_photo === 'string' && cover_photo.trim()) ? cover_photo.trim() : null;
+
+    let cleanCoverPos = undefined;
+    if (cover_position !== undefined && cover_position !== null && cover_position !== '') {
+      const parsed = parseInt(cover_position, 10);
+      if (!isNaN(parsed)) {
+        cleanCoverPos = Math.max(0, Math.min(100, parsed));
+      }
+    }
 
     // Handle username update & uniqueness verification
     let cleanUsername = undefined;
@@ -1343,13 +1357,14 @@ router.put('/member/profile', authenticate, async (req, res) => {
            research_interests = ?,
            achievements = ?,
            cover_photo = COALESCE(?, cover_photo),
+           cover_position = COALESCE(?, cover_position),
            username = COALESCE(?, username)
        WHERE id = ?`,
-      [name, bio, skillsJson, cleanPhoto, contactLinksJson, department, student_id, headline, researchInterestsJson, achievementsJson, cleanCover, cleanUsername, userId]
+      [name, bio, skillsJson, cleanPhoto, contactLinksJson, department, student_id, headline, researchInterestsJson, achievementsJson, cleanCover, cleanCoverPos, cleanUsername, userId]
     );
 
     const updatedUser = await getQuery(
-      'SELECT id, username, name, email, role, status, committee_role, department, student_id, bio, skills, profile_photo, contact_links, project_contributions, headline, research_interests, achievements, cover_photo FROM users WHERE id = ?',
+      'SELECT id, username, name, email, role, status, committee_role, department, student_id, bio, skills, profile_photo, contact_links, project_contributions, headline, research_interests, achievements, cover_photo, cover_position FROM users WHERE id = ?',
       [userId]
     );
 
@@ -1365,9 +1380,10 @@ router.put('/member/profile', authenticate, async (req, res) => {
              department = COALESCE(?, department),
              student_id = COALESCE(?, student_id),
              headline = COALESCE(?, headline),
+             cover_position = COALESCE(?, cover_position),
              user_id = ?
          WHERE user_id = ? OR (email IS NOT NULL AND email != '' AND LOWER(email) = LOWER(?))`,
-        [name, bio, skillsJson, cleanPhoto, contactLinksJson, department, student_id, headline, userId, userId, updatedUser?.email || '']
+        [name, bio, skillsJson, cleanPhoto, contactLinksJson, department, student_id, headline, cleanCoverPos, userId, userId, updatedUser?.email || '']
       );
     } catch (cmErr) {
       console.warn('Sync to committee_members warning:', cmErr.message);
@@ -1393,12 +1409,117 @@ router.put('/member/profile', authenticate, async (req, res) => {
         research_interests: parsedResearch,
         achievements: parsedAchievements,
         headline: updatedUser.headline || '',
-        cover_photo: updatedUser.cover_photo || ''
+        cover_photo: updatedUser.cover_photo || '',
+        cover_position: updatedUser.cover_position != null ? Number(updatedUser.cover_position) : 50
       }
     });
   } catch (err) {
     console.error('Profile update error:', err);
     res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// PATCH /api/member/cover-position: Quick update for authenticated member's cover position
+router.patch('/member/cover-position', authenticate, async (req, res) => {
+  try {
+    const rawPos = req.body.cover_position !== undefined ? req.body.cover_position : req.body.position;
+    if (rawPos === undefined || rawPos === null) {
+      return res.status(400).json({ error: 'Cover position percentage (0-100) is required' });
+    }
+    const position = Math.max(0, Math.min(100, Math.round(Number(rawPos))));
+    const userId = req.user.id;
+
+    await runQuery('UPDATE users SET cover_position = ? WHERE id = ?', [position, userId]);
+
+    try {
+      const u = await getQuery('SELECT email FROM users WHERE id = ?', [userId]);
+      await runQuery(
+        `UPDATE committee_members
+         SET cover_position = ?
+         WHERE user_id = ? OR (email IS NOT NULL AND email != '' AND LOWER(email) = LOWER(?))`,
+        [position, userId, u?.email || '']
+      );
+    } catch (cmErr) {}
+
+    res.json({
+      success: true,
+      message: 'Cover position updated successfully',
+      cover_position: position
+    });
+  } catch (err) {
+    console.error('Error updating member cover position:', err);
+    res.status(500).json({ error: 'Failed to update cover position' });
+  }
+});
+
+// PATCH /api/members/:id/cover-position: Update cover position for member by id/username/student_id
+router.patch('/members/:id/cover-position', authenticate, async (req, res) => {
+  try {
+    const targetId = req.params.id;
+    const rawPos = req.body.cover_position !== undefined ? req.body.cover_position : req.body.position;
+    if (rawPos === undefined || rawPos === null) {
+      return res.status(400).json({ error: 'Cover position percentage (0-100) is required' });
+    }
+    const position = Math.max(0, Math.min(100, Math.round(Number(rawPos))));
+
+    const isNum = /^\d+$/.test(targetId);
+    let matchedUserId = null;
+    let matchedCmId = null;
+
+    if (isNum) {
+      const u = await getQuery('SELECT id, email FROM users WHERE id = ?', [parseInt(targetId, 10)]);
+      if (u) {
+        matchedUserId = u.id;
+      } else {
+        const cm = await getQuery('SELECT id, user_id, email FROM committee_members WHERE id = ?', [parseInt(targetId, 10)]);
+        if (cm) {
+          matchedCmId = cm.id;
+          if (cm.user_id) matchedUserId = cm.user_id;
+        }
+      }
+    } else {
+      const u = await getQuery('SELECT id FROM users WHERE LOWER(username) = LOWER(?) OR LOWER(student_id) = LOWER(?)', [targetId, targetId]);
+      if (u) {
+        matchedUserId = u.id;
+      } else {
+        const cm = await getQuery('SELECT id, user_id FROM committee_members WHERE LOWER(student_id) = LOWER(?) OR LOWER(email) = LOWER(?)', [targetId, targetId]);
+        if (cm) {
+          matchedCmId = cm.id;
+          if (cm.user_id) matchedUserId = cm.user_id;
+        }
+      }
+    }
+
+    const isAdmin = req.user.role === 'admin' || req.user.role === 'super_admin';
+    const isOwner = matchedUserId ? (req.user.id === matchedUserId) : false;
+
+    if (!isAdmin && !isOwner) {
+      return res.status(403).json({ error: 'Unauthorized: You can only adjust your own profile cover position' });
+    }
+
+    if (matchedUserId) {
+      await runQuery('UPDATE users SET cover_position = ? WHERE id = ?', [position, matchedUserId]);
+      try {
+        const u = await getQuery('SELECT email FROM users WHERE id = ?', [matchedUserId]);
+        await runQuery(
+          `UPDATE committee_members
+           SET cover_position = ?
+           WHERE user_id = ? OR (email IS NOT NULL AND email != '' AND LOWER(email) = LOWER(?))`,
+          [position, matchedUserId, u?.email || '']
+        );
+      } catch (cmErr) {}
+    } else if (matchedCmId) {
+      await runQuery('UPDATE committee_members SET cover_position = ? WHERE id = ?', [position, matchedCmId]);
+    }
+
+    res.json({
+      success: true,
+      message: 'Cover position updated successfully',
+      cover_position: position
+    });
+  } catch (err) {
+    console.error('Error updating member cover position by id:', err);
+    res.status(500).json({ error: 'Failed to update cover position' });
   }
 });
 

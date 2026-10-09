@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Cpu, Award, Github, Linkedin, Mail, Globe, 
   Layers, CheckCircle2, ShieldAlert, Sparkles, User,
   GraduationCap, BookOpen, Twitter, Share2, Check, ExternalLink,
-  Edit3, Compass, Trophy, Bookmark, School, CheckCircle, Camera
+  Edit3, Compass, Trophy, Bookmark, School, CheckCircle, Camera, Move, Save, X
 } from 'lucide-react';
 import JSTUHeader from '../components/JSTUHeader';
 import { getStoredUser } from '../lib/auth';
@@ -16,6 +16,16 @@ export const MemberDetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Cover reposition state
+  const [isRepositioning, setIsRepositioning] = useState(false);
+  const [coverPos, setCoverPos] = useState(50);
+  const [isSavingPos, setIsSavingPos] = useState(false);
+  const [posSaveMsg, setPosSaveMsg] = useState<string | null>(null);
+  const dragStartY = useRef<number>(0);
+  const dragStartPos = useRef<number>(50);
+  const isDragging = useRef(false);
+  const coverBannerRef = useRef<HTMLDivElement>(null);
 
   const currentUser = getStoredUser();
 
@@ -33,6 +43,7 @@ export const MemberDetailPage: React.FC = () => {
         setError(data.error || 'Member not found');
       } else {
         setMember(data.data);
+        setCoverPos(data.data.cover_position != null ? Number(data.data.cover_position) : 50);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to load member profile');
@@ -49,6 +60,58 @@ export const MemberDetailPage: React.FC = () => {
       navigator.clipboard.writeText(shareUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
+    }
+  };
+
+  // --- Cover drag-to-reposition logic ---
+  const handleCoverPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isRepositioning) return;
+    isDragging.current = true;
+    dragStartY.current = e.clientY;
+    dragStartPos.current = coverPos;
+    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+  }, [isRepositioning, coverPos]);
+
+  const handleCoverPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging.current || !isRepositioning || !coverBannerRef.current) return;
+    const bannerH = coverBannerRef.current.offsetHeight;
+    const deltaY = e.clientY - dragStartY.current;
+    // dragging DOWN reveals bottom (higher %) → invert: drag UP → lower %
+    const deltaPct = (deltaY / bannerH) * 100;
+    const newPos = Math.max(0, Math.min(100, Math.round(dragStartPos.current + deltaPct)));
+    setCoverPos(newPos);
+  }, [isRepositioning]);
+
+  const handleCoverPointerUp = useCallback(() => {
+    isDragging.current = false;
+  }, []);
+
+  const handleSaveCoverPosition = async () => {
+    if (!member) return;
+    setIsSavingPos(true);
+    setPosSaveMsg(null);
+    try {
+      const token = localStorage.getItem('token') || localStorage.getItem('authToken') || sessionStorage.getItem('token');
+      const endpoint = member.id
+        ? `/api/members/${member.id}/cover-position`
+        : `/api/member/cover-position`;
+      const res = await fetch(endpoint, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ cover_position: coverPos })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setMember((prev: any) => ({ ...prev, cover_position: coverPos }));
+        setPosSaveMsg('✓ Position saved!');
+        setTimeout(() => { setIsRepositioning(false); setPosSaveMsg(null); }, 1500);
+      } else {
+        setPosSaveMsg(data.error || 'Failed to save');
+      }
+    } catch {
+      setPosSaveMsg('Network error');
+    } finally {
+      setIsSavingPos(false);
     }
   };
 
@@ -165,12 +228,21 @@ export const MemberDetailPage: React.FC = () => {
         {/* Hero Cover Banner & Identity Header */}
         <div className="bg-white dark:bg-[#0D1424] border border-slate-200/90 dark:border-slate-800 rounded-3xl shadow-xl dark:shadow-2xl shadow-indigo-500/5 dark:shadow-indigo-950/30 overflow-hidden mb-8">
           {/* Cover Banner */}
-          <div className="relative h-44 sm:h-56 md:h-64 w-full bg-slate-900 overflow-hidden">
+          <div
+            ref={coverBannerRef}
+            className={`relative h-44 sm:h-56 md:h-64 w-full bg-slate-900 overflow-hidden${isRepositioning && member.cover_photo ? ' cursor-ns-resize select-none' : ''}`}
+            onPointerDown={handleCoverPointerDown}
+            onPointerMove={handleCoverPointerMove}
+            onPointerUp={handleCoverPointerUp}
+            onPointerCancel={handleCoverPointerUp}
+          >
             {member.cover_photo ? (
               <img
                 src={member.cover_photo}
                 alt={`${member.name} Cover`}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover transition-none"
+                style={{ objectPosition: `center ${coverPos}%` }}
+                draggable={false}
               />
             ) : (
               <div className="w-full h-full bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-900 relative">
@@ -184,17 +256,75 @@ export const MemberDetailPage: React.FC = () => {
                 </div>
               </div>
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
-            
-            {isOwnerOrAdmin && (
-              <Link
-                to="/dashboard"
-                className="absolute bottom-3 right-3 px-3 py-1.5 rounded-xl bg-black/60 hover:bg-black/85 backdrop-blur-md text-white text-xs font-bold flex items-center gap-1.5 border border-white/20 transition-all shadow-lg active:scale-95 z-10"
-                title="Change cover banner in your dashboard"
-              >
-                <Camera className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Change Cover</span>
-              </Link>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent pointer-events-none" />
+
+            {/* Repositioning overlay */}
+            {isRepositioning && member.cover_photo && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-20">
+                <div className="flex flex-col items-center gap-1 bg-black/60 backdrop-blur-md rounded-2xl px-5 py-3 border border-white/20 shadow-2xl">
+                  <Move className="w-5 h-5 text-cyan-300 animate-bounce" />
+                  <span className="text-white text-xs font-bold tracking-wide">Drag up / down to reposition</span>
+                  <span className="text-cyan-300 font-mono text-sm font-black">{coverPos}%</span>
+                </div>
+              </div>
+            )}
+
+            {/* Owner controls: Reposition / Change Cover */}
+            {isOwnerOrAdmin && !isRepositioning && (
+              <div className="absolute bottom-3 right-3 flex items-center gap-2 z-10">
+                {member.cover_photo && (
+                  <button
+                    onClick={() => { setIsRepositioning(true); setCoverPos(member.cover_position ?? 50); }}
+                    className="px-3 py-1.5 rounded-xl bg-black/60 hover:bg-indigo-600/80 backdrop-blur-md text-white text-xs font-bold flex items-center gap-1.5 border border-white/20 transition-all shadow-lg active:scale-95"
+                    title="Drag to adjust which part of the cover photo shows"
+                  >
+                    <Move className="w-3.5 h-3.5 text-cyan-300" />
+                    <span>Reposition</span>
+                  </button>
+                )}
+                <Link
+                  to="/dashboard"
+                  className="px-3 py-1.5 rounded-xl bg-black/60 hover:bg-black/85 backdrop-blur-md text-white text-xs font-bold flex items-center gap-1.5 border border-white/20 transition-all shadow-lg active:scale-95"
+                  title="Change cover banner in your dashboard"
+                >
+                  <Camera className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Change Cover</span>
+                </Link>
+              </div>
+            )}
+
+            {/* Repositioning save/cancel bar */}
+            {isRepositioning && (
+              <div className="absolute bottom-3 left-0 right-0 flex items-center justify-center gap-2 z-20 px-4">
+                {/* Quick presets */}
+                <div className="flex items-center gap-1.5 bg-black/70 backdrop-blur-md rounded-xl px-2 py-1.5 border border-white/10">
+                  {[['Top', 10], ['Center', 50], ['Bottom', 90]].map(([label, val]) => (
+                    <button
+                      key={label as string}
+                      onClick={() => setCoverPos(val as number)}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+                        Math.abs(coverPos - (val as number)) < 15
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'text-slate-300 hover:bg-white/10'
+                      }`}
+                    >{label as string}</button>
+                  ))}
+                </div>
+                <button
+                  onClick={handleSaveCoverPosition}
+                  disabled={isSavingPos}
+                  className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 border border-emerald-400/30 transition-all shadow-lg active:scale-95 disabled:opacity-60"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{isSavingPos ? 'Saving...' : posSaveMsg || 'Save Position'}</span>
+                </button>
+                <button
+                  onClick={() => { setIsRepositioning(false); setCoverPos(member.cover_position ?? 50); setPosSaveMsg(null); }}
+                  className="p-1.5 rounded-xl bg-black/60 hover:bg-red-600/70 text-white border border-white/10 transition-all shadow-lg active:scale-95"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             )}
           </div>
 
