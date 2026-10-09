@@ -68,7 +68,9 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   const logout = () => {
     console.log('🚪 Logging out user');
     localStorage.removeItem('token');
+    localStorage.removeItem('authToken');
     localStorage.removeItem('authUser');
+    localStorage.removeItem('user');
     localStorage.removeItem('userProfileImage');
     setAuthUser(null);
     setIsAuthenticated(false);
@@ -104,8 +106,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     console.log('🔍 Checking existing authentication...');
     
     const checkAuth = async () => {
-      let token = localStorage.getItem('token');
-      const savedAuthUser = localStorage.getItem('authUser');
+      let token = localStorage.getItem('token') || localStorage.getItem('authToken');
+      const savedAuthUser = localStorage.getItem('authUser') || localStorage.getItem('user');
       
       console.log('Token exists:', !!token);
       console.log('Saved user exists:', !!savedAuthUser);
@@ -115,6 +117,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         if (token === 'portfolio-demo-token') {
           localStorage.removeItem('token');
           localStorage.removeItem('authUser');
+          localStorage.removeItem('user');
         }
         setIsAuthenticated(false);
         setAuthUser(null);
@@ -127,23 +130,29 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
         const parsedAuthUser = JSON.parse(savedAuthUser);
         
         // Validate required fields
-        if (!parsedAuthUser.email || !parsedAuthUser.name || !parsedAuthUser.uniqueId) {
+        if (!parsedAuthUser.email || !parsedAuthUser.name) {
           console.log('❌ Invalid user data structure');
           logout();
           setIsLoading(false);
           return;
         }
 
-        console.log('✅ Found valid auth data:', parsedAuthUser);
-        setAuthUser(parsedAuthUser);
+        const normalizedAuthUser: AuthUser = {
+          email: parsedAuthUser.email,
+          name: parsedAuthUser.name,
+          uniqueId: parsedAuthUser.uniqueId || parsedAuthUser.id || parsedAuthUser.student_id || 'member'
+        };
+
+        console.log('✅ Found valid auth data:', normalizedAuthUser);
+        setAuthUser(normalizedAuthUser);
         setIsAuthenticated(true);
         
         // Update user context with auth data first
         setUser(prev => ({
           ...prev,
-          name: parsedAuthUser.name,
-          email: parsedAuthUser.email,
-          memberId: parsedAuthUser.uniqueId,
+          name: normalizedAuthUser.name,
+          email: normalizedAuthUser.email,
+          memberId: normalizedAuthUser.uniqueId,
         }));
         
         // Fetch complete user profile including avatar from backend

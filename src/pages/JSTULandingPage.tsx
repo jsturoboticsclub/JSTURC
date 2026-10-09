@@ -5,7 +5,7 @@ import {
   ExternalLink, Search, CheckCircle2, ShieldCheck, 
   ArrowRight, Sparkles, Terminal, Calendar, Layers, Github,
   Settings, Sliders, ToggleLeft, ToggleRight, Edit3, X, Save, Plus,
-  SlidersHorizontal, Check, Eye, EyeOff, Layout
+  SlidersHorizontal, Check, Eye, EyeOff, Layout, Activity
 } from 'lucide-react';
 import JSTUHeader from '../components/JSTUHeader';
 import ScrollReveal from '../components/ScrollReveal';
@@ -15,6 +15,8 @@ import { TelemetryBar } from '../components/telemetry/TelemetryBar';
 import { TechTree } from '../components/techtree/TechTree';
 import { ProjectDetailModal, ProjectDetail } from '../components/projects/ProjectDetailModal';
 import { HardwareShowcase } from '../components/showcase/HardwareShowcase';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
+import { useAuthSync } from '../lib/auth';
 
 export const JSTULandingPage: React.FC = () => {
   const location = useLocation();
@@ -50,18 +52,12 @@ export const JSTULandingPage: React.FC = () => {
   const [joinStatus, setJoinStatus] = useState<{ success?: boolean; message?: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Current logged in user (if any)
-  const [currentUser, setCurrentUser] = useState<any>(() => {
-    try {
-      const saved = localStorage.getItem('user');
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      return null;
-    }
-  });
+  // Current synchronized user (if any)
+  const { user: currentUser } = useAuthSync();
 
   // Admin In-Page Superpower Quick Drawer State
   const [isSuperDrawerOpen, setIsSuperDrawerOpen] = useState(false);
+  useBodyScrollLock(isSuperDrawerOpen);
   const [superConfig, setSuperConfig] = useState<any>({
     branding: {
       title: 'JSTU Robotics Club',
@@ -86,6 +82,22 @@ export const JSTULandingPage: React.FC = () => {
     milestones_header: {
       title: 'Upcoming Club Milestones',
       subtitle: 'Scheduled field trials, workshops, and competitions'
+    },
+    telemetry: {
+      show: true,
+      status_label: 'LAB LIVE',
+      status_color: 'amber',
+      active_platform: 'ARES-IV Heavy Autonomous Rover',
+      sub_badge: 'ROS2 Humble · 22 Nodes',
+      battery_voltage: 24.6,
+      current_draw: 4.2,
+      imu_pitch: 1.2,
+      imu_roll: -0.4,
+      wifi_rssi: -52,
+      sys_health: '100% NOMINAL',
+      tournament_title: "ROBOSUMMIT '26",
+      tournament_date: '2026-11-15T09:00:00Z',
+      show_countdown: true,
     },
     project_categories: ['All', 'Autonomous Terrestrial', 'Aerial Robotics', 'Biomimetic Walking Robots', 'Competitive Robotics'],
     directory_categories: ['All', 'Executive', 'Leads']
@@ -164,6 +176,7 @@ export const JSTULandingPage: React.FC = () => {
             ...contentRes.data.site_config.meta,
             branding: contentRes.data.site_config.meta.branding || contentRes.data.branding?.meta || prev.branding,
             footer: contentRes.data.site_config.meta.footer || prev.footer,
+            telemetry: contentRes.data.site_config.meta.telemetry || prev.telemetry,
             milestones_header: {
               title: contentRes.data.milestones_header?.content || contentRes.data.site_config.meta.milestones_header?.title || prev.milestones_header?.title || 'Upcoming Club Milestones',
               subtitle: contentRes.data.milestones_header?.meta?.subtitle || contentRes.data.site_config.meta.milestones_header?.subtitle || prev.milestones_header?.subtitle || 'Scheduled field trials, workshops, and competitions'
@@ -449,7 +462,9 @@ export const JSTULandingPage: React.FC = () => {
       )}
 
       {/* REAL-TIME ROBOTICS TELEMETRY & LAB STATUS TICKER */}
-      <TelemetryBar />
+      {superConfig?.telemetry?.show !== false && (
+        <TelemetryBar config={superConfig?.telemetry} />
+      )}
 
 
       {/* FLOATING ACTION BUTTON FOR ADMIN (Quick In-Page Superpower Drawer) */}
@@ -544,6 +559,116 @@ export const JSTULandingPage: React.FC = () => {
                       })}
                       className="w-full px-3 py-1.5 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-xs text-slate-900 dark:text-white"
                     />
+                  </div>
+                </div>
+              </div>
+
+              {/* 0.5 LAB LIVE & ROBOTICS TELEMETRY */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                    <Activity className="w-3.5 h-3.5 text-amber-500" />
+                    <span>0.5 Lab Live Ticker</span>
+                  </h4>
+                  <label className="flex items-center gap-1.5 cursor-pointer text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={superConfig.telemetry?.show !== false}
+                      onChange={e => setSuperConfig({
+                        ...superConfig,
+                        telemetry: { ...superConfig.telemetry, show: e.target.checked }
+                      })}
+                      className="rounded text-indigo-600 focus:ring-0"
+                    />
+                    <span>Show Ticker</span>
+                  </label>
+                </div>
+                <div className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2.5">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 mb-1">Status Label</label>
+                      <input
+                        type="text"
+                        value={superConfig.telemetry?.status_label || 'LAB LIVE'}
+                        onChange={e => setSuperConfig({
+                          ...superConfig,
+                          telemetry: { ...superConfig.telemetry, status_label: e.target.value }
+                        })}
+                        className="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 mb-1">Status Color</label>
+                      <select
+                        value={superConfig.telemetry?.status_color || 'amber'}
+                        onChange={e => setSuperConfig({
+                          ...superConfig,
+                          telemetry: { ...superConfig.telemetry, status_color: e.target.value as any }
+                        })}
+                        className="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white"
+                      >
+                        <option value="amber">Amber (Active)</option>
+                        <option value="emerald">Emerald (Online)</option>
+                        <option value="cyan">Cyan (Telemetry)</option>
+                        <option value="rose">Rose (Restricted)</option>
+                        <option value="blue">Blue (Standby)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1">Active Robot Platform</label>
+                    <input
+                      type="text"
+                      value={superConfig.telemetry?.active_platform || 'ARES-IV Heavy Autonomous Rover'}
+                      onChange={e => setSuperConfig({
+                        ...superConfig,
+                        telemetry: { ...superConfig.telemetry, active_platform: e.target.value }
+                      })}
+                      className="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-xs text-slate-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 mb-1">Framework & Node Badge</label>
+                    <input
+                      type="text"
+                      placeholder="ROS2 Humble · 22 Nodes"
+                      value={superConfig.telemetry?.sub_badge || 'ROS2 Humble · 22 Nodes'}
+                      onChange={e => setSuperConfig({
+                        ...superConfig,
+                        telemetry: { ...superConfig.telemetry, sub_badge: e.target.value }
+                      })}
+                      className="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-xs text-slate-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 mb-1">Tournament Title</label>
+                      <input
+                        type="text"
+                        value={superConfig.telemetry?.tournament_title || "ROBOSUMMIT '26"}
+                        onChange={e => setSuperConfig({
+                          ...superConfig,
+                          telemetry: { ...superConfig.telemetry, tournament_title: e.target.value }
+                        })}
+                        className="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-xs text-slate-900 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 mb-1">Target ISO Date</label>
+                      <input
+                        type="text"
+                        placeholder="2026-11-15T09:00:00Z"
+                        value={superConfig.telemetry?.tournament_date || '2026-11-15T09:00:00Z'}
+                        onChange={e => setSuperConfig({
+                          ...superConfig,
+                          telemetry: { ...superConfig.telemetry, tournament_date: e.target.value }
+                        })}
+                        className="w-full px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-xs text-slate-900 dark:text-white font-mono"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1358,7 +1483,7 @@ export const JSTULandingPage: React.FC = () => {
                         ID: {m.student_id || `JSTU-${m.id}`}
                       </span>
                       <Link
-                        to={`/members/${m.user_id || m.id}`}
+                        to={`/${m.username || `members/${m.user_id || m.id}`}`}
                         className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors group-hover:translate-x-1 duration-200"
                       >
                         <span>View Profile</span>

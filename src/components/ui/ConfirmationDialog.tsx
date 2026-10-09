@@ -1,7 +1,9 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, Trash2, X } from 'lucide-react';
 import { Button } from './button';
 import { Card, CardContent, CardHeader, CardTitle } from './card';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 interface ConfirmationDialogProps {
   isOpen: boolean;
@@ -26,7 +28,9 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
   type = 'danger',
   isLoading = false
 }) => {
-  if (!isOpen) return null;
+  useBodyScrollLock(isOpen);
+
+  if (!isOpen || typeof document === 'undefined') return null;
 
   const getIcon = () => {
     switch (type) {
@@ -50,13 +54,12 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
     }
   };
 
-  return (
-    <>
-      {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-        onClick={onClose}
-      >
+  return createPortal(
+    <div 
+      className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex items-center justify-center p-4 overscroll-contain animate-in fade-in duration-150"
+      style={{ backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}
+      onClick={onClose}
+    >
         {/* Modal */}
         <Card 
           className="w-full max-w-md mx-auto shadow-2xl border-0"
@@ -105,9 +108,9 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
             </div>
           </CardContent>
         </Card>
-      </div>
-    </>
-  );
-};
+      </div>,
+      document.body
+    );
+  };
 
 export default ConfirmationDialog;

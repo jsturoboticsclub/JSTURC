@@ -5,18 +5,22 @@ import {
   XCircle, Plus, Save, AlertCircle, RefreshCw, 
   Layers, Bell, Tag, FileText, Globe, ArrowLeft, Cpu,
   Sliders, ToggleLeft, ToggleRight, Sparkles, Layout, Eye, EyeOff, Calendar,
-  Landmark, Copy, Crown, Award, Check, ExternalLink, GraduationCap, ChevronRight, Camera, Upload
+  Landmark, Copy, Crown, Award, Check, ExternalLink, GraduationCap, ChevronRight, Camera, Upload,
+  Activity, Timer, BatteryCharging, Wifi, Compass
 } from 'lucide-react';
 import JSTUHeader from '../components/JSTUHeader';
 import { fileToBase64Image } from '../utils/imageHelper';
 import { AdminConfirmModal, ConfirmModalConfig } from '../components/admin/AdminConfirmModal';
-import { AdminLayout } from '../components/admin/AdminLayout';
+import { AdminLayout, AdminTab } from '../components/admin/AdminLayout';
 import { AdminTechTreeManager } from '../components/admin/AdminTechTreeManager';
 import { AdminHardwareShowcaseManager } from '../components/admin/AdminHardwareShowcaseManager';
+import { AdminHardwareLoansManager } from '../components/admin/AdminHardwareLoansManager';
+import { AdminEventCheckInManager } from '../components/admin/AdminEventCheckInManager';
+import { AdminModalWrapper } from '../components/admin/AdminModalWrapper';
 
 export const AdminCMSPanel: React.FC = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'superpower' | 'hardware' | 'committees' | 'content' | 'users' | 'projects' | 'roles' | 'announcements' | 'techtree'>(() => {
+  const [activeTab, setActiveTab] = useState<AdminTab>(() => {
     if (typeof window !== 'undefined') {
       if (window.location.hash.includes('cms_') || window.location.search.includes('tab=content')) {
         return 'content';
@@ -207,6 +211,22 @@ export const AdminCMSPanel: React.FC = () => {
       directory: { title: 'Committee & Member Directory', subtitle: 'Team & Community', show: true },
       join: { title: 'Join the JSTU Robotics Club', subtitle: 'Recruitment 2026', show: true }
     },
+    telemetry: {
+      show: true,
+      status_label: 'LAB LIVE',
+      status_color: 'amber',
+      active_platform: 'ARES-IV Heavy Autonomous Rover',
+      sub_badge: 'ROS2 Humble · 22 Nodes',
+      battery_voltage: 24.6,
+      current_draw: 4.2,
+      imu_pitch: 1.2,
+      imu_roll: -0.4,
+      wifi_rssi: -52,
+      sys_health: '100% NOMINAL',
+      tournament_title: "ROBOSUMMIT '26",
+      tournament_date: '2026-11-15T09:00:00Z',
+      show_countdown: true,
+    },
     project_categories: ['All', 'Autonomous Terrestrial', 'Aerial Robotics', 'Biomimetic Walking Robots', 'Competitive Robotics'],
     directory_categories: ['All', 'Executive', 'Leads']
   });
@@ -310,7 +330,8 @@ export const AdminCMSPanel: React.FC = () => {
             ...prev,
             ...contentRes.data.site_config.meta,
             branding: contentRes.data.site_config.meta.branding || contentRes.data.branding?.meta || prev.branding,
-            footer: contentRes.data.site_config.meta.footer || prev.footer
+            footer: contentRes.data.site_config.meta.footer || prev.footer,
+            telemetry: contentRes.data.site_config.meta.telemetry || prev.telemetry
           }));
         }
       }
@@ -1312,6 +1333,277 @@ export const AdminCMSPanel: React.FC = () => {
                           />
                         )}
                       </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 0.5 Real-Time Robotics Telemetry & Lab Live Ticker */}
+              <div className="mb-8 p-6 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-2">
+                      <Activity className="w-4 h-4 text-amber-500" />
+                      0.5 Real-Time Telemetry & Lab Live Ticker
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Live control for the top landing page telemetry strip: active robot, live telemetry status, and competition countdown timer.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => setSuperConfig({
+                      ...superConfig,
+                      telemetry: {
+                        ...superConfig.telemetry,
+                        show: superConfig.telemetry?.show === false ? true : false
+                      }
+                    })}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold font-mono transition-all flex items-center gap-1.5 self-start sm:self-auto ${
+                      superConfig.telemetry?.show !== false
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                        : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
+                    }`}
+                  >
+                    {superConfig.telemetry?.show !== false ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                    <span>{superConfig.telemetry?.show !== false ? 'Ticker Visible on Landing Page' : 'Ticker Hidden'}</span>
+                  </button>
+                </div>
+
+                {/* Live Ticker Preview */}
+                <div className="p-3 mb-6 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-xs">
+                  <div className="text-[10px] font-mono text-slate-400 mb-1.5 uppercase tracking-wider font-bold">
+                    Live Preview Strip:
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                    <div className="flex items-center gap-2">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                      </span>
+                      <span className="text-[10px] font-black uppercase text-amber-500 tracking-wider">
+                        {superConfig.telemetry?.status_label || 'LAB LIVE'}
+                      </span>
+                      <span className="text-slate-300 dark:text-slate-700">·</span>
+                      <span className="font-bold text-slate-900 dark:text-white text-[11px]">
+                        {superConfig.telemetry?.active_platform || 'ARES-IV Heavy Autonomous Rover'}
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded text-[9px] bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
+                        {superConfig.telemetry?.sub_badge || 'ROS2 Humble · 22 Nodes'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                      <span>PWR: {superConfig.telemetry?.battery_voltage || '24.6'}V</span>
+                      <span>LINK: {superConfig.telemetry?.wifi_rssi || '-52'} dBm</span>
+                      <span className="text-emerald-500 font-bold">SYS: {superConfig.telemetry?.sys_health || '100% NOMINAL'}</span>
+                      <span className="text-indigo-600 dark:text-indigo-400 font-bold">{superConfig.telemetry?.tournament_title || "ROBOSUMMIT '26"}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-3 gap-4">
+                  {/* Panel 1: Platform & Mode */}
+                  <div className="p-4 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3">
+                    <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                      <Activity className="w-3.5 h-3.5 text-indigo-500" />
+                      Platform & Mode
+                    </h4>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Status Ticker Label
+                      </label>
+                      <input
+                        type="text"
+                        value={superConfig.telemetry?.status_label || ''}
+                        onChange={e => setSuperConfig({
+                          ...superConfig,
+                          telemetry: { ...superConfig.telemetry, status_label: e.target.value }
+                        })}
+                        placeholder="LAB LIVE"
+                        className="w-full px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Status Light Color
+                      </label>
+                      <select
+                        value={superConfig.telemetry?.status_color || 'amber'}
+                        onChange={e => setSuperConfig({
+                          ...superConfig,
+                          telemetry: { ...superConfig.telemetry, status_color: e.target.value }
+                        })}
+                        className="w-full px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs text-slate-900 dark:text-white"
+                      >
+                        <option value="amber">Amber (Active Prototyping)</option>
+                        <option value="emerald">Emerald (Nominal Online)</option>
+                        <option value="cyan">Cyan (Telemetry Broadcast)</option>
+                        <option value="rose">Rose (Restricted State)</option>
+                        <option value="blue">Blue (Standby Mode)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Active Robot Platform
+                      </label>
+                      <input
+                        type="text"
+                        value={superConfig.telemetry?.active_platform || ''}
+                        onChange={e => setSuperConfig({
+                          ...superConfig,
+                          telemetry: { ...superConfig.telemetry, active_platform: e.target.value }
+                        })}
+                        placeholder="ARES-IV Heavy Autonomous Rover"
+                        className="w-full px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs text-slate-900 dark:text-white font-medium"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Sub-Badge (ROS2 / Architecture)
+                      </label>
+                      <input
+                        type="text"
+                        value={superConfig.telemetry?.sub_badge || ''}
+                        onChange={e => setSuperConfig({
+                          ...superConfig,
+                          telemetry: { ...superConfig.telemetry, sub_badge: e.target.value }
+                        })}
+                        placeholder="ROS2 Humble · 22 Nodes"
+                        className="w-full px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs text-slate-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Panel 2: Hardware Telemetry Values */}
+                  <div className="p-4 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3">
+                    <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                      <BatteryCharging className="w-3.5 h-3.5 text-amber-500" />
+                      Power & System Health
+                    </h4>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                          Voltage (V)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={superConfig.telemetry?.battery_voltage || 24.6}
+                          onChange={e => setSuperConfig({
+                            ...superConfig,
+                            telemetry: { ...superConfig.telemetry, battery_voltage: e.target.value }
+                          })}
+                          className="w-full px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs text-slate-900 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                          Current (A)
+                        </label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          value={superConfig.telemetry?.current_draw || 4.2}
+                          onChange={e => setSuperConfig({
+                            ...superConfig,
+                            telemetry: { ...superConfig.telemetry, current_draw: e.target.value }
+                          })}
+                          className="w-full px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs text-slate-900 dark:text-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                          Wi-Fi RSSI (dBm)
+                        </label>
+                        <input
+                          type="number"
+                          value={superConfig.telemetry?.wifi_rssi || -52}
+                          onChange={e => setSuperConfig({
+                            ...superConfig,
+                            telemetry: { ...superConfig.telemetry, wifi_rssi: e.target.value }
+                          })}
+                          className="w-full px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs text-slate-900 dark:text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                          SYS Health
+                        </label>
+                        <input
+                          type="text"
+                          value={superConfig.telemetry?.sys_health || '100% NOMINAL'}
+                          onChange={e => setSuperConfig({
+                            ...superConfig,
+                            telemetry: { ...superConfig.telemetry, sys_health: e.target.value }
+                          })}
+                          className="w-full px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs text-slate-900 dark:text-white"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Panel 3: Tournament Countdown */}
+                  <div className="p-4 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                        <Timer className="w-3.5 h-3.5 text-indigo-500" />
+                        Tournament Countdown
+                      </h4>
+                      <label className="flex items-center gap-1 text-[11px] cursor-pointer text-slate-500">
+                        <input
+                          type="checkbox"
+                          checked={superConfig.telemetry?.show_countdown !== false}
+                          onChange={e => setSuperConfig({
+                            ...superConfig,
+                            telemetry: { ...superConfig.telemetry, show_countdown: e.target.checked }
+                          })}
+                          className="rounded text-indigo-600 focus:ring-0"
+                        />
+                        <span>Show Timer</span>
+                      </label>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Event / Tournament Title
+                      </label>
+                      <input
+                        type="text"
+                        value={superConfig.telemetry?.tournament_title || ''}
+                        onChange={e => setSuperConfig({
+                          ...superConfig,
+                          telemetry: { ...superConfig.telemetry, tournament_title: e.target.value }
+                        })}
+                        placeholder="ROBOSUMMIT '26"
+                        className="w-full px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                        Target ISO Date & Time
+                      </label>
+                      <input
+                        type="text"
+                        value={superConfig.telemetry?.tournament_date || ''}
+                        onChange={e => setSuperConfig({
+                          ...superConfig,
+                          telemetry: { ...superConfig.telemetry, tournament_date: e.target.value }
+                        })}
+                        placeholder="2026-11-15T09:00:00Z"
+                        className="w-full px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs text-slate-900 dark:text-white font-mono"
+                      />
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        Enter an ISO date format (e.g. 2026-11-15T09:00:00Z).
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -3381,7 +3673,7 @@ export const AdminCMSPanel: React.FC = () => {
 
         {/* User Edit Modal */}
         {editingUser && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
+          <AdminModalWrapper isOpen={!!editingUser} onClose={() => setEditingUser(null)}>
             <div className="bg-white dark:bg-[#0D1424] border border-slate-200 dark:border-slate-700 rounded-2xl sm:rounded-3xl p-5 sm:p-8 max-w-lg w-full shadow-2xl max-h-[92vh] overflow-y-auto">
               <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-4">
                 <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white truncate pr-2">Edit User: {editingUser.name}</h3>
@@ -3497,12 +3789,12 @@ export const AdminCMSPanel: React.FC = () => {
                 </div>
               </form>
             </div>
-          </div>
+          </AdminModalWrapper>
         )}
 
         {/* Project Edit Modal */}
         {editingProject && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
+          <AdminModalWrapper isOpen={!!editingProject} onClose={() => setEditingProject(null)}>
             <div className="bg-white dark:bg-[#0D1424] border border-slate-200 dark:border-slate-700 rounded-2xl sm:rounded-3xl p-4 sm:p-8 max-w-2xl w-full shadow-2xl max-h-[92vh] overflow-y-auto">
               <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-4">
                 <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white truncate pr-2">Edit Robotics Project: {editingProject.title}</h3>
@@ -3620,12 +3912,12 @@ export const AdminCMSPanel: React.FC = () => {
                 </div>
               </form>
             </div>
-          </div>
+          </AdminModalWrapper>
         )}
 
         {/* Milestone / Agenda Item Edit Modal */}
         {editingAgendaItem && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
+          <AdminModalWrapper isOpen={!!editingAgendaItem} onClose={() => setEditingAgendaItem(null)}>
             <div className="bg-white dark:bg-[#0D1424] border border-slate-200 dark:border-slate-700 rounded-2xl sm:rounded-3xl p-4 sm:p-8 max-w-xl w-full shadow-2xl max-h-[92vh] overflow-y-auto">
               <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-4">
                 <div className="flex items-center gap-2">
@@ -3725,7 +4017,7 @@ export const AdminCMSPanel: React.FC = () => {
                 </div>
               </form>
             </div>
-          </div>
+          </AdminModalWrapper>
         )}
 
         {/* ======================================================== */}
@@ -3734,7 +4026,7 @@ export const AdminCMSPanel: React.FC = () => {
 
         {/* 1. Add Committee Modal */}
         {isAddCommitteeModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
+          <AdminModalWrapper isOpen={isAddCommitteeModalOpen} onClose={() => setIsAddCommitteeModalOpen(false)}>
             <div className="bg-white dark:bg-[#0D1424] border border-slate-200 dark:border-slate-700 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl max-h-[92vh] overflow-y-auto">
               <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-5">
                 <div className="flex items-center gap-2">
@@ -3844,12 +4136,12 @@ export const AdminCMSPanel: React.FC = () => {
                 </div>
               </form>
             </div>
-          </div>
+          </AdminModalWrapper>
         )}
 
         {/* 2. Edit Committee Modal */}
         {editingCommittee && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
+          <AdminModalWrapper isOpen={!!editingCommittee} onClose={() => setEditingCommittee(null)}>
             <div className="bg-white dark:bg-[#0D1424] border border-slate-200 dark:border-slate-700 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl max-h-[92vh] overflow-y-auto">
               <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-5">
                 <div className="flex items-center gap-2">
@@ -3955,12 +4247,12 @@ export const AdminCMSPanel: React.FC = () => {
                 </div>
               </form>
             </div>
-          </div>
+          </AdminModalWrapper>
         )}
 
         {/* 3. Add Committee Member Modal */}
         {isAddMemberModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
+          <AdminModalWrapper isOpen={isAddMemberModalOpen} onClose={() => setIsAddMemberModalOpen(false)}>
             <div className="bg-white dark:bg-[#0D1424] border border-slate-200 dark:border-slate-700 rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-2xl max-h-[92vh] overflow-y-auto">
               <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-5">
                 <div className="flex items-center gap-2">
@@ -4275,12 +4567,12 @@ export const AdminCMSPanel: React.FC = () => {
                 </div>
               </form>
             </div>
-          </div>
+          </AdminModalWrapper>
         )}
 
         {/* 4. Edit Committee Member Modal */}
         {editingCommitteeMember && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
+          <AdminModalWrapper isOpen={!!editingCommitteeMember} onClose={() => setEditingCommitteeMember(null)}>
             <div className="bg-white dark:bg-[#0D1424] border border-slate-200 dark:border-slate-700 rounded-3xl p-6 sm:p-8 max-w-xl w-full shadow-2xl max-h-[92vh] overflow-y-auto">
               <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-5">
                 <div className="flex items-center gap-2">
@@ -4528,12 +4820,12 @@ export const AdminCMSPanel: React.FC = () => {
                 </div>
               </form>
             </div>
-          </div>
+          </AdminModalWrapper>
         )}
 
         {/* 5. Clone Roster Modal */}
         {isCloneModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
+          <AdminModalWrapper isOpen={isCloneModalOpen} onClose={() => setIsCloneModalOpen(false)}>
             <div className="bg-white dark:bg-[#0D1424] border border-slate-200 dark:border-slate-700 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl">
               <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-5">
                 <div className="flex items-center gap-2">
@@ -4593,12 +4885,12 @@ export const AdminCMSPanel: React.FC = () => {
                 </div>
               </div>
             </div>
-          </div>
+          </AdminModalWrapper>
         )}
 
         {/* 5b. Dedicated Create Custom Category Modal */}
         {isCreateCategoryModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
+          <AdminModalWrapper isOpen={isCreateCategoryModalOpen} onClose={() => { setIsCreateCategoryModalOpen(false); setNewCategoryName(''); }}>
             <div className="bg-white dark:bg-[#0D1424] border border-slate-200 dark:border-slate-700 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5">
               <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
                 <div className="flex items-center gap-2">
@@ -4693,12 +4985,12 @@ export const AdminCMSPanel: React.FC = () => {
                 </button>
               </div>
             </div>
-          </div>
+          </AdminModalWrapper>
         )}
 
         {/* 6. Assign Member to Committee Sessions Modal */}
         {assigningSessionUser && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-xs animate-in fade-in duration-200">
+          <AdminModalWrapper isOpen={!!assigningSessionUser} onClose={() => setAssigningSessionUser(null)}>
             <div className="bg-white dark:bg-[#0D1424] border border-slate-200 dark:border-slate-700 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl">
               <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 mb-5">
                 <div className="flex items-center gap-3">
@@ -4825,11 +5117,19 @@ export const AdminCMSPanel: React.FC = () => {
                 </div>
               </form>
             </div>
-          </div>
+          </AdminModalWrapper>
         )}
 
         {activeTab === 'hardware' && (
           <AdminHardwareShowcaseManager />
+        )}
+
+        {activeTab === 'loans' && (
+          <AdminHardwareLoansManager />
+        )}
+
+        {activeTab === 'checkins' && (
+          <AdminEventCheckInManager />
         )}
 
         {activeTab === 'techtree' && (

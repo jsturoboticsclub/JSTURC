@@ -12,6 +12,7 @@ const MemberDashboard = lazy(() => import('./pages/MemberDashboard'));
 const AdminCMSPanel = lazy(() => import('./pages/AdminCMSPanel'));
 const AuthPage = lazy(() => import('./pages/AuthPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+const LabLoansPage = lazy(() => import('./pages/LabLoansPage'));
 
 // Legacy / Auxiliary Pages (split separately so they never bloat main bundle)
 const Homepage = lazy(() => import('./pages/Homepage'));
@@ -52,6 +53,7 @@ const AppRoutes: React.FC = () => {
         <Route path="/" element={<JSTULandingPage />} />
         <Route path="/committees" element={<CommitteesPage />} />
         <Route path="/committees/:id" element={<CommitteesPage />} />
+        <Route path="/loans" element={<LabLoansPage />} />
         <Route path="/members/:id" element={<MemberDetailPage />} />
         <Route path="/dashboard" element={<ProtectedRoute><MemberDashboard /></ProtectedRoute>} />
         <Route path="/admin" element={<AdminRouteGuard><AdminCMSPanel /></AdminRouteGuard>} />
@@ -76,6 +78,9 @@ const AppRoutes: React.FC = () => {
         <Route path="/events" element={<EventsPage />} />
         <Route path="/social" element={<SocialPage />} />
         <Route path="/resources" element={<ResourcesPage />} />
+
+        {/* Direct Member Username Profile Route (e.g. /:username) */}
+        <Route path="/:id" element={<MemberDetailPage />} />
 
         {/* Dynamic 404 Catch-All */}
         <Route path="*" element={<NotFoundPage />} />

@@ -99,12 +99,24 @@ const submissionLimiter = rateLimit({
   }
 });
 
+const lookupLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    available: false,
+    error: 'Too many username lookups. Please slow down.'
+  }
+});
+
 // Apply rate limiters
 app.use('/api', globalApiLimiter);
 app.use('/api/auth/login', strictAuthLimiter);
 app.use('/api/auth/register', strictAuthLimiter);
 app.use('/api/auth/forgot-password', strictAuthLimiter);
 app.use('/api/auth/reset-password', strictAuthLimiter);
+app.use('/api/members/check-username', lookupLimiter);
 app.use('/api/join-apply', submissionLimiter);
 app.use('/api/member/propose-project', submissionLimiter);
 

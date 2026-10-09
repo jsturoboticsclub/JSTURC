@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, ExternalLink, Play, BookOpen, Clock, User, CheckCircle2, Cpu, Wrench, ShieldCheck, Sparkles } from 'lucide-react';
 import { TechSkillNode } from '../../data/curriculumData';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 interface CourseDetailModalProps {
   course: TechSkillNode | null;
@@ -8,9 +10,11 @@ interface CourseDetailModalProps {
 }
 
 export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({ course, onClose }) => {
+  useBodyScrollLock(!!course);
+
   const [showVideo, setShowVideo] = useState(false);
 
-  if (!course) return null;
+  if (!course || typeof document === 'undefined') return null;
 
   const getStatusBadge = (status?: string) => {
     switch (status) {
@@ -43,8 +47,12 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({ course, on
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-950/80 backdrop-blur-md animate-fadeIn overflow-y-auto">
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-xl animate-fadeIn overflow-y-auto overscroll-contain"
+      style={{ backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}
+      onClick={onClose}
+    >
       <div
         className="relative w-full max-w-3xl bg-white dark:bg-[#0D1424] border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl overflow-hidden my-auto max-h-[92vh] flex flex-col text-slate-900 dark:text-slate-100 transition-colors"
         onClick={e => e.stopPropagation()}
@@ -68,7 +76,7 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({ course, on
         </div>
 
         {/* Modal Scrollable Body */}
-        <div className="overflow-y-auto p-6 sm:p-8 space-y-6">
+        <div className="overflow-y-auto overscroll-contain p-6 sm:p-8 space-y-6">
           {/* Title & Metadata Strip */}
           <div className="space-y-3">
             <h2 className="text-2xl sm:text-3xl font-black tracking-tight leading-snug">
@@ -241,6 +249,7 @@ export const CourseDetailModal: React.FC<CourseDetailModalProps> = ({ course, on
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

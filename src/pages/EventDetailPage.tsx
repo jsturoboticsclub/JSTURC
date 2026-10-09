@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Calendar, MapPin, Users, Clock, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Calendar, MapPin, Users, Clock, ExternalLink, QrCode, Ticket, Copy, Check, X } from 'lucide-react';
 import InteractionButtons from '../components/InteractionButtons';
 import BackNavigation from '../components/BackNavigation';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 const EventDetailPage: React.FC = () => {
   const navigate = useNavigate();
@@ -12,6 +14,29 @@ const EventDetailPage: React.FC = () => {
   
   // Get referrer from navigation state, default to /events
   const referrer = location.state?.referrer || '/events';
+
+  const [showTicketModal, setShowTicketModal] = useState(false);
+  useBodyScrollLock(showTicketModal);
+  const [copiedToken, setCopiedToken] = useState(false);
+
+  const currentUser = (() => {
+    try {
+      const u = localStorage.getItem('user');
+      return u ? JSON.parse(u) : null;
+    } catch {
+      return null;
+    }
+  })();
+
+  const ticketToken = `jstu:evt:${id || '1'}:usr:${currentUser?.id || 1}:${currentUser?.email || 'guest'}`;
+
+  const handleCopyToken = () => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(ticketToken);
+      setCopiedToken(true);
+      setTimeout(() => setCopiedToken(false), 2500);
+    }
+  };
 
   // Fetch event data from API
   const { data: eventData, isLoading, error } = useQuery({
@@ -273,22 +298,113 @@ const EventDetailPage: React.FC = () => {
 
 
 
-        {/* RSVP Button */}
-        <div className="sticky bottom-4">
-          <button 
-            onClick={() => {
-              if (event.rsvpLink) {
-                window.open(event.rsvpLink, '_blank', 'noopener,noreferrer');
-              } else {
-                console.log('No RSVP link available for event');
-              }
-            }}
-            className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 border-2 border-emerald-500 text-emerald-600 dark:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:border-emerald-600 dark:hover:border-emerald-400 rounded-xl transition-all duration-200 font-medium text-sm"
-          >
-            RSVP for Event
-            {event.rsvpLink && <ExternalLink className="w-4 h-4" />}
-          </button>
+        {/* Digital Ticket Pass & RSVP Actions */}
+        <div className="sticky bottom-4 space-y-2 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md p-2 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-xl">
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button
+              onClick={() => setShowTicketModal(true)}
+              className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-mono text-xs font-bold shadow-md shadow-indigo-600/25 transition-all"
+            >
+              <QrCode className="w-4 h-4" />
+              <span>Digital Admission Pass & QR Ticket</span>
+            </button>
+
+            <button 
+              onClick={() => {
+                if (event.rsvpLink) {
+                  window.open(event.rsvpLink, '_blank', 'noopener,noreferrer');
+                } else {
+                  setShowTicketModal(true);
+                }
+              }}
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 border-2 border-emerald-500 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 hover:border-emerald-600 dark:hover:border-emerald-300 rounded-xl transition-all duration-200 font-mono text-xs font-bold"
+            >
+              <span>RSVP for Event</span>
+              {event.rsvpLink && <ExternalLink className="w-3.5 h-3.5" />}
+            </button>
+          </div>
         </div>
+
+        {/* Dynamic Digital Ticket Pass Modal */}
+        {showTicketModal && typeof document !== 'undefined' && createPortal(
+          <div 
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn"
+            onClick={() => setShowTicketModal(false)}
+          >
+            <div 
+              className="relative w-full max-w-md bg-white dark:bg-[#0D1424] border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl p-6 sm:p-7 space-y-6 text-slate-900 dark:text-white"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
+                  <Ticket className="w-5 h-5" />
+                  <span className="font-mono text-xs font-bold uppercase tracking-wider">JSTURC Admission Credential</span>
+                </div>
+                <button
+                  onClick={() => setShowTicketModal(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Ticket Badge Design */}
+              <div className="p-5 rounded-2xl bg-gradient-to-b from-indigo-50 to-slate-50 dark:from-[#0B1020] dark:to-[#070B14] border-2 border-dashed border-indigo-300 dark:border-indigo-800/80 space-y-4 text-center">
+                <div className="space-y-1">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                    Confirmed Attendee
+                  </span>
+                  <h3 className="text-base font-bold line-clamp-2 pt-1">{event.title}</h3>
+                  <p className="text-xs font-mono text-slate-500">{event.date} · {event.time}</p>
+                </div>
+
+                {/* QR Code Canvas / Img */}
+                <div className="flex flex-col items-center justify-center p-3 rounded-2xl bg-white shadow-inner mx-auto w-48 h-48 border border-slate-200">
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(ticketToken)}&margin=1`}
+                    alt="Ticket QR Code"
+                    className="w-40 h-40 object-contain"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <div className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Attendee: {currentUser?.name || 'Club Member'}
+                  </div>
+                  <div className="text-[11px] font-mono text-slate-500">
+                    Token: {ticketToken.slice(0, 24)}...
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleCopyToken}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  {copiedToken ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-500" />
+                      <span>Token Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copy Verification Token</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => setShowTicketModal(false)}
+                  className="py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-mono font-bold transition-colors"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
         </div>
       </div>
     </div>

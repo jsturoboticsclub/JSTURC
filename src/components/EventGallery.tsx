@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, ChevronLeft, ChevronRight, ImageIcon } from 'lucide-react';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 interface GalleryImage {
   data?: string;
@@ -15,6 +17,7 @@ interface EventGalleryProps {
 
 const EventGallery: React.FC<EventGalleryProps> = ({ eventId, gallery }) => {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  useBodyScrollLock(selectedIndex !== null);
   const [imageErrors, setImageErrors] = useState<Set<number>>(new Set());
 
   if (!gallery || gallery.length === 0) {
@@ -115,9 +118,10 @@ const EventGallery: React.FC<EventGalleryProps> = ({ eventId, gallery }) => {
       </div>
 
       {/* Lightbox Modal */}
-      {selectedIndex !== null && (
+      {selectedIndex !== null && typeof document !== 'undefined' && createPortal(
         <div
-          className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-sm flex items-center justify-center"
+          className="fixed inset-0 z-[9999] bg-black/95 backdrop-blur-md flex items-center justify-center overscroll-contain"
+          style={{ backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}
           onClick={handleClose}
         >
           {/* Close Button */}
@@ -181,7 +185,8 @@ const EventGallery: React.FC<EventGalleryProps> = ({ eventId, gallery }) => {
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/60 text-sm">
             Use arrow keys to navigate • ESC to close
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Keyboard Navigation */}

@@ -53,15 +53,27 @@ const requireAdmin = (req, res, next) => {
 // ==========================================
 // 0. CLOUDINARY MEDIA UPLOAD ROUTES
 // ==========================================
+// 0. CLOUDINARY MEDIA UPLOAD & USERNAME UTILITIES
+// ==========================================
 
-// POST /api/upload/image: Upload image data URI or base64 directly to Cloudinary
+const RESERVED_USERNAMES = new Set([
+  'api', 'admin', 'dashboard', 'members', 'committee', 'committees',
+  'projects', 'events', 'news', 'resources', 'login', 'register',
+  'auth', 'signup', 'settings', 'notifications', 'debug', 'curation',
+  'hardware', 'robots', 'explore', 'about', 'join', 'contact', 'static',
+  'uploads', 'assets', 'favicon.ico', '404', 'legacy-home', 'saved-posts',
+  'comments', 'social'
+]);
+
+// POST /api/upload/image: Upload image data URI or base64 directly to Cloudinary with folder categorization
 router.post(['/upload/image', '/api/upload/image'], authenticate, async (req, res) => {
   try {
-    const { image, folder, public_id } = req.body;
+    const { image, folder, category, public_id } = req.body;
     if (!image) {
       return res.status(400).json({ error: 'Image data or base64 string is required' });
     }
-    const secureUrl = await CloudinaryService.uploadImage(image, folder || 'jstu_robotics/uploads', public_id || null);
+    const targetFolder = folder || category || 'general';
+    const secureUrl = await CloudinaryService.uploadImage(image, targetFolder, public_id || null);
     res.json({ success: true, url: secureUrl });
   } catch (err) {
     console.error('Cloudinary upload error:', err);
@@ -69,9 +81,41 @@ router.post(['/upload/image', '/api/upload/image'], authenticate, async (req, re
   }
 });
 
+// GET /api/members/check-username/:username: Check if username is available
+router.get('/members/check-username/:username', async (req, res) => {
+  try {
+    const raw = (req.params.username || '').trim().toLowerCase();
+    const excludeUserId = req.query.userId ? parseInt(req.query.userId, 10) : 0;
+
+    if (!raw || raw.length < 3 || raw.length > 30) {
+      return res.json({ available: false, error: 'Username must be between 3 and 30 characters.' });
+    }
+    if (!/^[a-z0-9][a-z0-9_-]{1,28}[a-z0-9]$/.test(raw) && !/^[a-z0-9]{3,30}$/.test(raw)) {
+      return res.json({ available: false, error: 'Only lowercase letters, numbers, hyphens, and underscores allowed.' });
+    }
+    if (RESERVED_USERNAMES.has(raw)) {
+      return res.json({ available: false, error: 'This is a reserved system keyword.' });
+    }
+
+    const existing = await getQuery(
+      'SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id != ?',
+      [raw, excludeUserId]
+    );
+
+    if (existing) {
+      return res.json({ available: false, error: 'Username is already taken by another member.' });
+    }
+
+    return res.json({ available: true, message: 'Username is available!' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to check username availability' });
+  }
+});
+
 // ==========================================
 // 1. PUBLIC LANDING PAGE & DIRECTORY ROUTES
 // ==========================================
+
 
 // GET /api/site-content: Fetch all dynamic landing page content items
 router.get('/site-content', async (req, res) => {
@@ -134,6 +178,7 @@ router.get('/members', async (req, res) => {
       const cmRows = await allQuery(`
         SELECT cm.id, cm.committee_id,
                COALESCE(cm.user_id, u.id) as user_id,
+               u.username,
                CASE WHEN cm.is_override = 1 THEN cm.name ELSE COALESCE(u.name, cm.name) END as name,
                COALESCE(u.email, cm.email) as email,
                CASE WHEN cm.is_override = 1 THEN cm.department ELSE COALESCE(u.department, cm.department) END as department,
@@ -199,7 +244,7 @@ router.get('/members', async (req, res) => {
     // Fallback if committee_members table has no entries for target committee
     if (members.length === 0) {
       const rows = await allQuery(`
-        SELECT u.id, u.name, u.email, u.role, u.committee_role, u.committee_category, u.department, u.student_id,
+        SELECT u.id, u.username, u.name, u.email, u.role, u.committee_role, u.committee_category, u.department, u.student_id,
                u.bio, u.skills, u.profile_photo, u.contact_links, u.project_contributions, u.created_at
         FROM users u
         WHERE u.status = 'approved'
@@ -431,7 +476,7 @@ router.get('/committees/:id', async (req, res) => {
   }
 });
 
-// GET /api/members/:id: Dynamic member profile page details (supports user ID, committee member ID, or student ID)
+// GET /api/members/:id: Dynamic member profile page details (supports username, user ID, committee member ID, or student ID)
 router.get('/members/:id', async (req, res) => {
   try {
     const rawId = req.params.id;
@@ -442,29 +487,50 @@ router.get('/members/:id', async (req, res) => {
     let member = null;
     const isNum = !isNaN(rawId);
 
+    // 0. Primary: Try finding in users table by unique username (case-insensitive)
+    member = await getQuery(
+      `SELECT u.id, u.username, u.name, u.email, u.role, u.status, u.committee_role, u.department, u.student_id,
+              u.bio, u.skills, u.profile_photo, u.contact_links, u.project_contributions,
+              u.headline, u.research_interests, u.achievements, u.cover_photo, u.created_at,
+              cm.designation as cm_designation, cm.category as cm_category, cm.headline as cm_headline
+       FROM users u
+       LEFT JOIN committee_members cm ON (cm.user_id = u.id OR (cm.email IS NOT NULL AND cm.email != '' AND LOWER(cm.email) = LOWER(u.email)))
+       WHERE LOWER(u.username) = LOWER(?)`,
+      [rawId]
+    );
+
+    if (member) {
+      if (member.cm_designation) member.committee_role = member.cm_designation;
+      if (!member.headline && member.cm_headline) member.headline = member.cm_headline;
+    }
+
     // 1. Try finding in users table by user ID
-    if (isNum) {
+    if (!member && isNum) {
       member = await getQuery(
-        `SELECT u.id, u.name, u.email, u.role, u.status, u.committee_role, u.department, u.student_id,
-                u.bio, u.skills, u.profile_photo, u.contact_links, u.project_contributions, u.created_at,
-                cm.designation as cm_designation, cm.category as cm_category
+        `SELECT u.id, u.username, u.name, u.email, u.role, u.status, u.committee_role, u.department, u.student_id,
+                u.bio, u.skills, u.profile_photo, u.contact_links, u.project_contributions,
+                u.headline, u.research_interests, u.achievements, u.cover_photo, u.created_at,
+                cm.designation as cm_designation, cm.category as cm_category, cm.headline as cm_headline
          FROM users u
          LEFT JOIN committee_members cm ON (cm.user_id = u.id OR (cm.email IS NOT NULL AND cm.email != '' AND LOWER(cm.email) = LOWER(u.email)))
          WHERE u.id = ?`,
         [parseInt(rawId, 10)]
       );
 
-      if (member && member.cm_designation) {
-        member.committee_role = member.cm_designation;
+      if (member) {
+        if (member.cm_designation) member.committee_role = member.cm_designation;
+        if (!member.headline && member.cm_headline) member.headline = member.cm_headline;
       }
     }
 
     // 2. If not found by user ID, try finding in committee_members table by cm.id
     if (!member && isNum) {
       const cm = await getQuery(
-        `SELECT cm.*, u.id as user_actual_id, u.role as user_role, u.status as user_status,
+        `SELECT cm.*, u.id as user_actual_id, u.username as user_username, u.role as user_role, u.status as user_status,
                 u.bio as user_bio, u.skills as user_skills, u.profile_photo as user_photo,
                 u.contact_links as user_links, u.project_contributions as user_projects,
+                u.headline as user_headline, u.research_interests as user_research,
+                u.achievements as user_achievements, u.cover_photo as user_cover,
                 u.name as user_actual_name, u.department as user_dept, u.student_id as user_student_id
          FROM committee_members cm
          LEFT JOIN users u ON (cm.user_id = u.id OR (cm.email IS NOT NULL AND cm.email != '' AND LOWER(cm.email) = LOWER(u.email)))
@@ -475,6 +541,7 @@ router.get('/members/:id', async (req, res) => {
       if (cm) {
         member = {
           id: cm.user_actual_id || cm.id,
+          username: cm.user_username || null,
           name: (cm.is_override === 1) ? cm.name : (cm.user_actual_name || cm.name),
           email: cm.email,
           role: cm.user_role || (cm.category === 'Executive' || cm.category === 'Advisor' ? 'Executive' : 'Member'),
@@ -487,6 +554,10 @@ router.get('/members/:id', async (req, res) => {
           profile_photo: ((cm.profile_photo && !cm.profile_photo.includes('api.dicebear.com')) ? cm.profile_photo : (cm.user_photo && !cm.user_photo.includes('api.dicebear.com')) ? cm.user_photo : (cm.profile_photo || cm.user_photo || '')),
           contact_links: (cm.is_override === 1 || !cm.user_links) ? cm.social_links : cm.user_links,
           project_contributions: cm.user_projects || '[]',
+          headline: cm.headline || cm.user_headline || cm.designation || '',
+          research_interests: cm.user_research || '[]',
+          achievements: cm.user_achievements || '[]',
+          cover_photo: cm.user_cover || '',
           created_at: cm.created_at
         };
       }
@@ -495,25 +566,29 @@ router.get('/members/:id', async (req, res) => {
     // 3. Try finding in users by student_id or email
     if (!member) {
       member = await getQuery(
-        `SELECT u.id, u.name, u.email, u.role, u.status, u.committee_role, u.department, u.student_id,
-                u.bio, u.skills, u.profile_photo, u.contact_links, u.project_contributions, u.created_at,
-                cm.designation as cm_designation
+        `SELECT u.id, u.username, u.name, u.email, u.role, u.status, u.committee_role, u.department, u.student_id,
+                u.bio, u.skills, u.profile_photo, u.contact_links, u.project_contributions,
+                u.headline, u.research_interests, u.achievements, u.cover_photo, u.created_at,
+                cm.designation as cm_designation, cm.headline as cm_headline
          FROM users u
          LEFT JOIN committee_members cm ON (cm.user_id = u.id OR (cm.email IS NOT NULL AND cm.email != '' AND LOWER(cm.email) = LOWER(u.email)))
          WHERE LOWER(u.student_id) = LOWER(?) OR LOWER(u.email) = LOWER(?)`,
         [rawId, rawId]
       );
-      if (member && member.cm_designation) {
-        member.committee_role = member.cm_designation;
+      if (member) {
+        if (member.cm_designation) member.committee_role = member.cm_designation;
+        if (!member.headline && member.cm_headline) member.headline = member.cm_headline;
       }
     }
 
     // 4. Also try committee_members by student_id or email
     if (!member) {
       const cm = await getQuery(
-        `SELECT cm.*, u.id as user_actual_id, u.role as user_role, u.status as user_status,
+        `SELECT cm.*, u.id as user_actual_id, u.username as user_username, u.role as user_role, u.status as user_status,
                 u.bio as user_bio, u.skills as user_skills, u.profile_photo as user_photo,
                 u.contact_links as user_links, u.project_contributions as user_projects,
+                u.headline as user_headline, u.research_interests as user_research,
+                u.achievements as user_achievements, u.cover_photo as user_cover,
                 u.name as user_actual_name, u.department as user_dept, u.student_id as user_student_id
          FROM committee_members cm
          LEFT JOIN users u ON (cm.user_id = u.id OR (cm.email IS NOT NULL AND cm.email != '' AND LOWER(cm.email) = LOWER(u.email)))
@@ -523,6 +598,7 @@ router.get('/members/:id', async (req, res) => {
       if (cm) {
         member = {
           id: cm.user_actual_id || cm.id,
+          username: cm.user_username || null,
           name: (cm.is_override === 1) ? cm.name : (cm.user_actual_name || cm.name),
           email: cm.email,
           role: cm.user_role || (cm.category === 'Executive' || cm.category === 'Advisor' ? 'Executive' : 'Member'),
@@ -535,6 +611,10 @@ router.get('/members/:id', async (req, res) => {
           profile_photo: ((cm.profile_photo && !cm.profile_photo.includes('api.dicebear.com')) ? cm.profile_photo : (cm.user_photo && !cm.user_photo.includes('api.dicebear.com')) ? cm.user_photo : (cm.profile_photo || cm.user_photo || '')),
           contact_links: (cm.is_override === 1 || !cm.user_links) ? cm.social_links : cm.user_links,
           project_contributions: cm.user_projects || '[]',
+          headline: cm.headline || cm.user_headline || cm.designation || '',
+          research_interests: cm.user_research || '[]',
+          achievements: cm.user_achievements || '[]',
+          cover_photo: cm.user_cover || '',
           created_at: cm.created_at
         };
       }
@@ -547,9 +627,13 @@ router.get('/members/:id', async (req, res) => {
     let skills = [];
     let contact_links = {};
     let project_contributions = [];
+    let research_interests = [];
+    let achievements = [];
     try { skills = member.skills ? (typeof member.skills === 'string' ? JSON.parse(member.skills) : member.skills) : []; } catch (e) {}
     try { contact_links = member.contact_links ? (typeof member.contact_links === 'string' ? JSON.parse(member.contact_links) : member.contact_links) : {}; } catch (e) {}
     try { project_contributions = member.project_contributions ? (typeof member.project_contributions === 'string' ? JSON.parse(member.project_contributions) : member.project_contributions) : []; } catch (e) {}
+    try { research_interests = member.research_interests ? (typeof member.research_interests === 'string' ? JSON.parse(member.research_interests) : member.research_interests) : []; } catch (e) {}
+    try { achievements = member.achievements ? (typeof member.achievements === 'string' ? JSON.parse(member.achievements) : member.achievements) : []; } catch (e) {}
 
     // Fetch all committee tenures & sessions this member has served in
     let committee_history = [];
@@ -576,6 +660,10 @@ router.get('/members/:id', async (req, res) => {
         skills,
         contact_links,
         project_contributions,
+        research_interests,
+        achievements,
+        headline: member.headline || member.committee_role || 'Robotics Club Member',
+        cover_photo: member.cover_photo || '',
         committee_history
       }
     });
@@ -1081,7 +1169,7 @@ router.get('/auth/me', authenticate, async (req, res) => {
 router.get('/member/dashboard', authenticate, async (req, res) => {
   try {
     const user = await getQuery(
-      'SELECT id, name, email, role, status, committee_role, department, bio, skills, profile_photo, contact_links, project_contributions FROM users WHERE id = ?',
+      'SELECT id, username, name, email, role, status, committee_role, department, student_id, bio, skills, profile_photo, contact_links, project_contributions, headline, research_interests, achievements, cover_photo FROM users WHERE id = ?',
       [req.user.id]
     );
 
@@ -1095,9 +1183,13 @@ router.get('/member/dashboard', authenticate, async (req, res) => {
     let skills = [];
     let contact_links = {};
     let project_contributions = [];
+    let research_interests = [];
+    let achievements = [];
     try { skills = user.skills ? JSON.parse(user.skills) : []; } catch (e) {}
     try { contact_links = user.contact_links ? JSON.parse(user.contact_links) : {}; } catch (e) {}
     try { project_contributions = user.project_contributions ? JSON.parse(user.project_contributions) : []; } catch (e) {}
+    try { research_interests = user.research_interests ? (typeof user.research_interests === 'string' ? JSON.parse(user.research_interests) : user.research_interests) : []; } catch (e) {}
+    try { achievements = user.achievements ? (typeof user.achievements === 'string' ? JSON.parse(user.achievements) : user.achievements) : []; } catch (e) {}
 
     const myProposalsRaw = await allQuery('SELECT * FROM projects WHERE submitted_by_id = ? ORDER BY id DESC', [req.user.id]);
     const myProposals = myProposalsRaw.map(p => {
@@ -1113,9 +1205,14 @@ router.get('/member/dashboard', authenticate, async (req, res) => {
       data: {
         profile: {
           ...user,
+          username: user.username || '',
           skills,
           contact_links,
-          project_contributions
+          project_contributions,
+          research_interests,
+          achievements,
+          headline: user.headline || '',
+          cover_photo: user.cover_photo || ''
         },
         announcements,
         activeProjects: projects,
@@ -1184,19 +1281,53 @@ router.get('/member/project-proposals', authenticate, async (req, res) => {
   }
 });
 
-// PUT /api/member/profile: Member updates their own profile
+// PUT /api/member/profile: Member updates their own profile (including username, cover photo, headline)
 router.put('/member/profile', authenticate, async (req, res) => {
   try {
-    const { name, bio, skills, profile_photo, contact_links, department, student_id } = req.body;
+    const { name, bio, skills, profile_photo, contact_links, department, student_id, headline, research_interests, achievements, cover_photo, username } = req.body;
     const userId = req.user.id;
     let cleanPhoto = (profile_photo && typeof profile_photo === 'string' && profile_photo.trim()) ? profile_photo.trim() : null;
+    let cleanCover = (cover_photo && typeof cover_photo === 'string' && cover_photo.trim()) ? cover_photo.trim() : null;
 
-    if (cleanPhoto) {
-      cleanPhoto = await maybeUploadToCloudinary(cleanPhoto, 'jstu_robotics/members', `user_${userId}`);
+    // Handle username update & uniqueness verification
+    let cleanUsername = undefined;
+    if (username !== undefined && username !== null) {
+      const trimmed = String(username).trim().toLowerCase();
+      if (trimmed !== '') {
+        if (!/^[a-z0-9][a-z0-9_-]{1,28}[a-z0-9]$/.test(trimmed) && !/^[a-z0-9]{3,30}$/.test(trimmed)) {
+          return res.status(400).json({
+            error: 'Username must be 3-30 characters and contain only lowercase letters, numbers, hyphens (-), and underscores (_).'
+          });
+        }
+        if (RESERVED_USERNAMES.has(trimmed)) {
+          return res.status(400).json({
+            error: `"${trimmed}" is a reserved system keyword and cannot be chosen as a profile username.`
+          });
+        }
+        const duplicate = await getQuery(
+          'SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id != ?',
+          [trimmed, userId]
+        );
+        if (duplicate) {
+          return res.status(400).json({
+            error: `Username "@${trimmed}" is already taken by another member. Please choose another username.`
+          });
+        }
+        cleanUsername = trimmed;
+      }
+    }
+
+    if (cleanPhoto && cleanPhoto.startsWith('data:image/')) {
+      cleanPhoto = await maybeUploadToCloudinary(cleanPhoto, 'avatars', `avatar_${userId}`);
+    }
+    if (cleanCover && cleanCover.startsWith('data:image/')) {
+      cleanCover = await maybeUploadToCloudinary(cleanCover, 'covers', `cover_${userId}`);
     }
 
     const skillsJson = Array.isArray(skills) ? JSON.stringify(skills) : JSON.stringify([]);
     const contactLinksJson = typeof contact_links === 'object' ? JSON.stringify(contact_links) : JSON.stringify({});
+    const researchInterestsJson = Array.isArray(research_interests) ? JSON.stringify(research_interests) : (typeof research_interests === 'string' ? research_interests : '[]');
+    const achievementsJson = Array.isArray(achievements) ? JSON.stringify(achievements) : (typeof achievements === 'string' ? achievements : '[]');
 
     // 1. Update users table
     await runQuery(
@@ -1207,13 +1338,18 @@ router.put('/member/profile', authenticate, async (req, res) => {
            profile_photo = COALESCE(?, profile_photo),
            contact_links = ?,
            department = COALESCE(?, department),
-           student_id = COALESCE(?, student_id)
+           student_id = COALESCE(?, student_id),
+           headline = COALESCE(?, headline),
+           research_interests = ?,
+           achievements = ?,
+           cover_photo = COALESCE(?, cover_photo),
+           username = COALESCE(?, username)
        WHERE id = ?`,
-      [name, bio, skillsJson, cleanPhoto, contactLinksJson, department, student_id, userId]
+      [name, bio, skillsJson, cleanPhoto, contactLinksJson, department, student_id, headline, researchInterestsJson, achievementsJson, cleanCover, cleanUsername, userId]
     );
 
     const updatedUser = await getQuery(
-      'SELECT id, name, email, role, status, committee_role, department, student_id, bio, skills, profile_photo, contact_links, project_contributions FROM users WHERE id = ?',
+      'SELECT id, username, name, email, role, status, committee_role, department, student_id, bio, skills, profile_photo, contact_links, project_contributions, headline, research_interests, achievements, cover_photo FROM users WHERE id = ?',
       [userId]
     );
 
@@ -1228,9 +1364,10 @@ router.put('/member/profile', authenticate, async (req, res) => {
              social_links = ?,
              department = COALESCE(?, department),
              student_id = COALESCE(?, student_id),
+             headline = COALESCE(?, headline),
              user_id = ?
          WHERE user_id = ? OR (email IS NOT NULL AND email != '' AND LOWER(email) = LOWER(?))`,
-        [name, bio, skillsJson, cleanPhoto, contactLinksJson, department, student_id, userId, userId, updatedUser?.email || '']
+        [name, bio, skillsJson, cleanPhoto, contactLinksJson, department, student_id, headline, userId, userId, updatedUser?.email || '']
       );
     } catch (cmErr) {
       console.warn('Sync to committee_members warning:', cmErr.message);
@@ -1238,16 +1375,25 @@ router.put('/member/profile', authenticate, async (req, res) => {
 
     let parsedSkills = [];
     let parsedLinks = {};
+    let parsedResearch = [];
+    let parsedAchievements = [];
     try { parsedSkills = JSON.parse(updatedUser.skills); } catch (e) {}
     try { parsedLinks = JSON.parse(updatedUser.contact_links); } catch (e) {}
+    try { parsedResearch = JSON.parse(updatedUser.research_interests); } catch (e) {}
+    try { parsedAchievements = JSON.parse(updatedUser.achievements); } catch (e) {}
 
     res.json({
       success: true,
       message: 'Profile updated successfully! Your updates are now live all across the website.',
       data: {
         ...updatedUser,
+        username: updatedUser.username || '',
         skills: parsedSkills,
-        contact_links: parsedLinks
+        contact_links: parsedLinks,
+        research_interests: parsedResearch,
+        achievements: parsedAchievements,
+        headline: updatedUser.headline || '',
+        cover_photo: updatedUser.cover_photo || ''
       }
     });
   } catch (err) {
@@ -1978,6 +2124,312 @@ router.put(['/admin/users/:id/committee-category', '/api/admin/users/:id/committ
   } catch (err) {
     console.error('Update user category error:', err);
     res.status(500).json({ error: 'Failed to update user category' });
+  }
+});
+
+// ==========================================
+// HARDWARE LAB REQUISITION & LOAN ENDPOINTS
+// ==========================================
+
+// POST /api/hardware/loans - Member requests hardware loan
+router.post(['/hardware/loans', '/api/hardware/loans'], authenticate, async (req, res) => {
+  try {
+    const { hardware_id, hardware_title, requested_days = 7, project_name = '', purpose = '' } = req.body;
+    if (!hardware_id || !hardware_title) {
+      return res.status(400).json({ success: false, error: 'Hardware ID and title are required' });
+    }
+
+    const user = await getQuery('SELECT id, name, email, status FROM users WHERE id = ?', [req.user.id]);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const duration = Math.min(Math.max(parseInt(requested_days, 10) || 7, 1), 30);
+    const result = await runQuery(
+      `INSERT INTO hardware_loans (user_id, user_name, user_email, hardware_id, hardware_title, requested_days, project_name, purpose, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+      [user.id, user.name, user.email, hardware_id, hardware_title, duration, project_name, purpose]
+    );
+
+    res.json({
+      success: true,
+      message: 'Hardware loan requisition submitted for approval',
+      loan_id: result.lastID
+    });
+  } catch (err) {
+    console.error('Create hardware loan error:', err);
+    res.status(500).json({ success: false, error: 'Failed to submit hardware loan requisition' });
+  }
+});
+
+// GET /api/hardware/loans/mine - Member views their own loan history
+router.get(['/hardware/loans/mine', '/api/hardware/loans/mine'], authenticate, async (req, res) => {
+  try {
+    const loans = await allQuery(
+      `SELECT * FROM hardware_loans WHERE user_id = ? ORDER BY created_at DESC`,
+      [req.user.id]
+    );
+    res.json({ success: true, loans });
+  } catch (err) {
+    console.error('Fetch my loans error:', err);
+    res.status(500).json({ success: false, error: 'Failed to retrieve loan records' });
+  }
+});
+
+// GET /api/admin/hardware/loans - Admin views all loan requisitions
+router.get(['/admin/hardware/loans', '/api/admin/hardware/loans'], authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { status } = req.query;
+    let sql = `SELECT hl.*, u.department, u.student_id, u.profile_photo, u.role as user_role
+               FROM hardware_loans hl
+               LEFT JOIN users u ON hl.user_id = u.id`;
+    const params = [];
+    if (status && status !== 'all') {
+      sql += ` WHERE hl.status = ?`;
+      params.push(status);
+    }
+    sql += ` ORDER BY hl.created_at DESC`;
+
+    const loans = await allQuery(sql, params);
+    res.json({ success: true, loans });
+  } catch (err) {
+    console.error('Admin fetch hardware loans error:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch hardware loan applications' });
+  }
+});
+
+// PATCH /api/admin/hardware/loans/:id - Admin approves, rejects, marks active, or marks returned
+router.patch(['/admin/hardware/loans/:id', '/api/admin/hardware/loans/:id'], authenticate, requireAdmin, async (req, res) => {
+  try {
+    const loanId = req.params.id;
+    const { status, admin_notes } = req.body;
+    const validStatuses = ['pending', 'approved', 'active', 'returned', 'rejected'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ success: false, error: 'Invalid loan status value' });
+    }
+
+    const loan = await getQuery('SELECT * FROM hardware_loans WHERE id = ?', [loanId]);
+    if (!loan) {
+      return res.status(404).json({ success: false, error: 'Loan application not found' });
+    }
+
+    let updateSql = `UPDATE hardware_loans SET status = ?, admin_notes = COALESCE(?, admin_notes)`;
+    const params = [status, admin_notes];
+
+    if (status === 'approved' || status === 'active') {
+      const days = loan.requested_days || 7;
+      const expectedReturn = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+      updateSql += `, approved_by = ?, loaned_at = CURRENT_TIMESTAMP, expected_return_at = ?`;
+      params.push(req.user.id, expectedReturn);
+    } else if (status === 'returned') {
+      updateSql += `, returned_at = CURRENT_TIMESTAMP`;
+    }
+
+    updateSql += ` WHERE id = ?`;
+    params.push(loanId);
+
+    await runQuery(updateSql, params);
+
+    // Auto-sync available stock in equipment_inventory if matching hardware_id exists
+    try {
+      if ((status === 'approved' || status === 'active') && loan.status !== 'approved' && loan.status !== 'active') {
+        await runQuery(
+          `UPDATE equipment_inventory SET available_stock = MAX(0, available_stock - 1) WHERE id = ?`,
+          [loan.hardware_id]
+        );
+      } else if (status === 'returned' && loan.status !== 'returned') {
+        await runQuery(
+          `UPDATE equipment_inventory SET available_stock = MIN(total_stock, available_stock + 1) WHERE id = ?`,
+          [loan.hardware_id]
+        );
+      }
+    } catch (invErr) {
+      console.warn('Equipment inventory stock sync notice:', invErr.message);
+    }
+
+    res.json({ success: true, message: `Loan status successfully updated to ${status}` });
+  } catch (err) {
+    console.error('Update hardware loan error:', err);
+    res.status(500).json({ success: false, error: 'Failed to update loan requisition' });
+  }
+});
+
+// GET /api/hardware/inventory - Get all equipment in lab inventory
+router.get(['/hardware/inventory', '/api/hardware/inventory'], async (req, res) => {
+  try {
+    const items = await allQuery('SELECT * FROM equipment_inventory ORDER BY category ASC, name ASC');
+    res.json({ success: true, items });
+  } catch (err) {
+    console.error('Fetch equipment inventory error:', err);
+    res.status(500).json({ success: false, error: 'Failed to retrieve equipment inventory' });
+  }
+});
+
+// POST /api/admin/hardware/inventory - Admin adds new lab equipment
+router.post(['/admin/hardware/inventory', '/api/admin/hardware/inventory'], authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { id, name, category, spec, badge, type, total_stock = 1, available_stock, status = 'available', image_url } = req.body;
+    if (!name || !category) {
+      return res.status(400).json({ success: false, error: 'Name and category are required' });
+    }
+
+    const itemId = id?.trim() || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const total = parseInt(total_stock, 10) || 1;
+    const available = available_stock !== undefined ? parseInt(available_stock, 10) : total;
+
+    await runQuery(
+      `INSERT INTO equipment_inventory (id, name, category, spec, badge, type, total_stock, available_stock, status, image_url)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [itemId, name, category, spec || '', badge || 'LAB', type || 'sensor', total, available, status, image_url || '']
+    );
+
+    const created = await getQuery('SELECT * FROM equipment_inventory WHERE id = ?', [itemId]);
+    res.json({ success: true, message: 'Equipment added to inventory successfully', item: created });
+  } catch (err) {
+    console.error('Add equipment inventory error:', err);
+    res.status(500).json({ success: false, error: 'Failed to add equipment to inventory' });
+  }
+});
+
+// PUT /api/admin/hardware/inventory/:id - Admin updates existing lab equipment
+router.put(['/admin/hardware/inventory/:id', '/api/admin/hardware/inventory/:id'], authenticate, requireAdmin, async (req, res) => {
+  try {
+    const itemId = req.params.id;
+    const { name, category, spec, badge, type, total_stock, available_stock, status, image_url } = req.body;
+
+    const existing = await getQuery('SELECT * FROM equipment_inventory WHERE id = ?', [itemId]);
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Equipment item not found' });
+    }
+
+    const updatedTotal = total_stock !== undefined ? parseInt(total_stock, 10) : existing.total_stock;
+    const updatedAvailable = available_stock !== undefined ? parseInt(available_stock, 10) : existing.available_stock;
+    const newName = name !== undefined ? name : existing.name;
+    const newCategory = category !== undefined ? category : existing.category;
+    const newSpec = spec !== undefined ? spec : (existing.spec || '');
+    const newBadge = badge !== undefined ? badge : (existing.badge || 'LAB');
+    const newType = type !== undefined ? type : (existing.type || 'sensor');
+    const newStatus = status !== undefined ? status : (existing.status || 'available');
+    const newImage = image_url !== undefined ? image_url : (existing.image_url || '');
+
+    await runQuery(
+      `UPDATE equipment_inventory
+       SET name = ?,
+           category = ?,
+           spec = ?,
+           badge = ?,
+           type = ?,
+           total_stock = ?,
+           available_stock = ?,
+           status = ?,
+           image_url = ?,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [newName, newCategory, newSpec, newBadge, newType, updatedTotal, updatedAvailable, newStatus, newImage, itemId]
+    );
+
+    const updated = await getQuery('SELECT * FROM equipment_inventory WHERE id = ?', [itemId]);
+    res.json({ success: true, message: 'Equipment updated successfully', item: updated });
+  } catch (err) {
+    console.error('Update equipment inventory error:', err);
+    res.status(500).json({ success: false, error: 'Failed to update equipment inventory' });
+  }
+});
+
+// DELETE /api/admin/hardware/inventory/:id - Admin removes equipment from inventory
+router.delete(['/admin/hardware/inventory/:id', '/api/admin/hardware/inventory/:id'], authenticate, requireAdmin, async (req, res) => {
+  try {
+    const itemId = req.params.id;
+    const existing = await getQuery('SELECT * FROM equipment_inventory WHERE id = ?', [itemId]);
+    if (!existing) {
+      return res.status(404).json({ success: false, error: 'Equipment item not found' });
+    }
+
+    await runQuery('DELETE FROM equipment_inventory WHERE id = ?', [itemId]);
+    res.json({ success: true, message: 'Equipment item removed from inventory' });
+  } catch (err) {
+    console.error('Delete equipment inventory error:', err);
+    res.status(500).json({ success: false, error: 'Failed to delete equipment item' });
+  }
+});
+
+// ==========================================
+// EVENT TICKET PASS & ATTENDANCE CHECK-IN
+// ==========================================
+
+// POST /api/events/:id/verify-ticket - Coordinator checks in an attendee via QR or ticket token
+router.post(['/events/:id/verify-ticket', '/api/events/:id/verify-ticket'], authenticate, requireAdmin, async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const { ticket_token } = req.body;
+    if (!ticket_token) {
+      return res.status(400).json({ success: false, error: 'Ticket token is required' });
+    }
+
+    // Check if already checked in
+    const existing = await getQuery(
+      'SELECT * FROM event_checkins WHERE event_id = ? AND ticket_token = ?',
+      [eventId, ticket_token]
+    );
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        already_checked_in: true,
+        message: 'This pass has already been used for check-in.',
+        checked_in_at: existing.checked_in_at,
+        attendee: { name: existing.user_name }
+      });
+    }
+
+    // Parse payload (format: jstu:evt:<eventId>:usr:<userId>:<timestamp>)
+    let attendeeName = 'Club Member';
+    let userId = req.user.id;
+    try {
+      const parts = ticket_token.split(':');
+      if (parts.length >= 5 && parts[3]) {
+        userId = parseInt(parts[3], 10) || req.user.id;
+      }
+      const u = await getQuery('SELECT name FROM users WHERE id = ?', [userId]);
+      if (u) attendeeName = u.name;
+    } catch (e) {}
+
+    await runQuery(
+      `INSERT INTO event_checkins (event_id, user_id, user_name, ticket_token, status)
+       VALUES (?, ?, ?, ?, 'checked_in')`,
+      [eventId, userId, attendeeName, ticket_token]
+    );
+
+    res.json({
+      success: true,
+      message: 'Admission verified! Attendee checked in successfully.',
+      attendee: {
+        user_id: userId,
+        name: attendeeName,
+        checked_in_at: new Date().toISOString()
+      }
+    });
+  } catch (err) {
+    console.error('Verify event ticket error:', err);
+    res.status(500).json({ success: false, error: 'Failed to verify ticket pass' });
+  }
+});
+
+// GET /api/events/:id/checkins - Get attendance list for event
+router.get(['/events/:id/checkins', '/api/events/:id/checkins'], authenticate, requireAdmin, async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const checkins = await allQuery(
+      `SELECT ec.*, u.email, u.student_id, u.department, u.profile_photo
+       FROM event_checkins ec
+       LEFT JOIN users u ON ec.user_id = u.id
+       WHERE ec.event_id = ?
+       ORDER BY ec.checked_in_at DESC`,
+      [eventId]
+    );
+    res.json({ success: true, count: checkins.length, checkins });
+  } catch (err) {
+    console.error('Fetch event checkins error:', err);
+    res.status(500).json({ success: false, error: 'Failed to retrieve event attendance records' });
   }
 });
 

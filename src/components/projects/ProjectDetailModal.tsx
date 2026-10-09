@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, ExternalLink, Github, Cpu, Layers, CheckCircle, ShieldAlert, FileText, Wrench } from 'lucide-react';
 import { CyberBadge } from '../common/CyberPrimitives';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 export interface ProjectDetail {
   id: string | number;
@@ -22,9 +24,11 @@ interface ProjectDetailModalProps {
 }
 
 export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ project, onClose }) => {
+  useBodyScrollLock(!!project);
+
   const [activeTab, setActiveTab] = useState<'overview' | 'bom' | 'architecture'>('overview');
 
-  if (!project) return null;
+  if (!project || typeof document === 'undefined') return null;
 
   const defaultBOM = [
     { item: 'Main Flight/Rover Controller', qty: 1, spec: 'STM32F405 ARM Cortex-M4 @ 168MHz' },
@@ -38,9 +42,16 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ project,
   const bomList = project.bom || defaultBOM;
   const architecture = project.computeArchitecture || 'Distributed CAN Bus + ROS2 DDS Architecture';
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="w-full max-w-3xl bg-white dark:bg-[#070B14] border border-slate-200 dark:border-indigo-500/40 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/85 backdrop-blur-xl animate-in fade-in duration-200 overflow-y-auto overscroll-contain"
+      style={{ backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-3xl bg-white dark:bg-[#070B14] border border-slate-200 dark:border-indigo-500/40 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
+        onClick={e => e.stopPropagation()}
+      >
         {/* Modal Top Bar */}
         <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-start justify-between bg-slate-50 dark:bg-[#0D1424]">
           <div>
@@ -102,7 +113,7 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ project,
         </div>
 
         {/* Modal Scrollable Body */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1 text-slate-600 dark:text-slate-300 text-sm">
+        <div className="p-6 overflow-y-auto overscroll-contain space-y-6 flex-1 text-slate-600 dark:text-slate-300 text-sm">
           {activeTab === 'overview' && (
             <div className="space-y-6">
               {project.image && (
@@ -148,7 +159,7 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ project,
             <div className="space-y-4">
               <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800 text-xs font-mono text-slate-500 dark:text-slate-400 uppercase font-bold">
                 <span>Hardware Component</span>
-                <span>Qty // Specification</span>
+                <span>Quantity · Specification</span>
               </div>
               <div className="space-y-2">
                 {bomList.map((item, idx) => (
@@ -233,6 +244,7 @@ export const ProjectDetailModal: React.FC<ProjectDetailModalProps> = ({ project,
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

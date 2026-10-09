@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import InteractionButtons from '../InteractionButtons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardContent } from '../ui/card';
@@ -11,6 +12,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/axios';
 import CreatePostDialog from '../CreatePostDialog';
 import ConfirmationDialog from '../ui/ConfirmationDialog';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 interface SocialCardProps {
   id: string;
@@ -63,6 +65,7 @@ const SocialCard: React.FC<SocialCardProps> = ({
   
   // State for full-screen image viewer
   const [showFullScreenViewer, setShowFullScreenViewer] = useState(false);
+  useBodyScrollLock(showFullScreenViewer);
   const [fullScreenImageIndex, setFullScreenImageIndex] = useState(0);
    
   // Check if current user is the post owner - use passed currentUserId or fallback to useUser
@@ -748,9 +751,10 @@ const SocialCard: React.FC<SocialCardProps> = ({
        )}
 
                                {/* Full-Screen Image Viewer Modal */}
-         {showFullScreenViewer && media && media.length > 0 && (
+         {showFullScreenViewer && media && media.length > 0 && typeof document !== 'undefined' && createPortal(
            <div 
-             className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center animate-in fade-in duration-200"
+             className="fixed inset-0 bg-black/90 backdrop-blur-md z-[9999] flex items-center justify-center animate-in fade-in duration-200 overscroll-contain"
+             style={{ backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}
              onTouchStart={handleFullScreenTouchStartEnhanced}
              onTouchMove={handleFullScreenTouchMoveEnhanced}
              onTouchEnd={handleFullScreenTouchEndEnhanced}
@@ -900,7 +904,8 @@ const SocialCard: React.FC<SocialCardProps> = ({
             )}
 
 
-         </div>
+         </div>,
+         document.body
        )}
      </Card>
      

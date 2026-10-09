@@ -599,6 +599,11 @@ export const RoboticsCanvas3D: React.FC<RoboticsCanvas3DProps> = ({ className = 
       const deltaX = clientX - prevPointerRef.current.x;
       const deltaY = clientY - prevPointerRef.current.y;
 
+      // On mobile touch devices: if swipe is predominantly vertical, prioritize natural page scroll
+      if ('touches' in e && Math.abs(deltaY) > Math.abs(deltaX) * 1.2) {
+        return;
+      }
+
       targetRotationRef.current.y += deltaX * 0.008;
       targetRotationRef.current.x = Math.max(-0.6, Math.min(0.8, targetRotationRef.current.x + deltaY * 0.008));
 
@@ -610,6 +615,7 @@ export const RoboticsCanvas3D: React.FC<RoboticsCanvas3DProps> = ({ className = 
     };
 
     const domElement = renderer.domElement;
+    domElement.style.touchAction = 'pan-y';
     domElement.addEventListener('mousedown', onPointerDown);
     domElement.addEventListener('mousemove', onPointerMove);
     window.addEventListener('mouseup', onPointerUp);

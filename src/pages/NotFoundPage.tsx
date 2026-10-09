@@ -2,20 +2,14 @@ import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AlertTriangle, Home, Landmark, Layers, Users, ArrowLeft, Search, ShieldCheck } from 'lucide-react';
 import JSTUHeader from '../components/JSTUHeader';
+import { getStoredUser } from '../lib/auth';
 
 export const NotFoundPage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
   // Current session if logged in
-  const currentUser = (() => {
-    try {
-      const saved = localStorage.getItem('user');
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      return null;
-    }
-  })();
+  const currentUser = getStoredUser();
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#070B14] text-slate-900 dark:text-slate-100 flex flex-col selection:bg-indigo-500 selection:text-white transition-colors duration-300">

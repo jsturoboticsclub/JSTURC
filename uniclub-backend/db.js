@@ -98,6 +98,10 @@ async function initDatabase() {
       profile_photo TEXT,
       contact_links TEXT,
       project_contributions TEXT,
+      headline TEXT,
+      research_interests TEXT,
+      achievements TEXT,
+      cover_photo TEXT,
       committee_category TEXT DEFAULT 'Auto',
       committee_id INTEGER DEFAULT 1,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -183,6 +187,47 @@ async function initDatabase() {
       social_links TEXT,
       display_order INTEGER DEFAULT 10,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS hardware_loans (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      user_name TEXT,
+      user_email TEXT,
+      hardware_id TEXT NOT NULL,
+      hardware_title TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      requested_days INTEGER NOT NULL DEFAULT 7,
+      project_name TEXT,
+      purpose TEXT,
+      admin_notes TEXT,
+      approved_by INTEGER REFERENCES users(id),
+      loaned_at DATETIME,
+      expected_return_at DATETIME,
+      returned_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS event_checkins (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_id TEXT NOT NULL,
+      user_id INTEGER NOT NULL,
+      user_name TEXT,
+      ticket_token TEXT UNIQUE NOT NULL,
+      status TEXT DEFAULT 'checked_in',
+      checked_in_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS equipment_inventory (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL,
+      spec TEXT,
+      badge TEXT,
+      type TEXT DEFAULT 'sensor',
+      total_stock INTEGER DEFAULT 1,
+      available_stock INTEGER DEFAULT 1,
+      image_url TEXT,
+      status TEXT DEFAULT 'available',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`
   ];
 
@@ -200,11 +245,49 @@ async function initDatabase() {
   try { await runQuery(`ALTER TABLE projects ADD COLUMN submitted_by_name TEXT`); } catch (e) { }
   try { await runQuery(`ALTER TABLE users ADD COLUMN committee_category TEXT DEFAULT 'Auto'`); } catch (e) { }
   try { await runQuery(`ALTER TABLE users ADD COLUMN committee_id INTEGER DEFAULT 1`); } catch (e) { }
+  try { await runQuery(`ALTER TABLE users ADD COLUMN headline TEXT`); } catch (e) { }
+  try { await runQuery(`ALTER TABLE users ADD COLUMN research_interests TEXT`); } catch (e) { }
+  try { await runQuery(`ALTER TABLE users ADD COLUMN achievements TEXT`); } catch (e) { }
+  try { await runQuery(`ALTER TABLE users ADD COLUMN cover_photo TEXT`); } catch (e) { }
+  try { await runQuery(`ALTER TABLE users ADD COLUMN username TEXT`); } catch (e) { }
+  try { await runQuery(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username) WHERE username IS NOT NULL`); } catch (e) { }
+  try { await runQuery(`ALTER TABLE committee_members ADD COLUMN headline TEXT`); } catch (e) { }
 
   await seedInitialData();
   await ensureMasterAdmin();
   await ensureRegisteredMembers();
+  await ensureUsernames();
 }
+
+async function ensureUsernames() {
+  try {
+    const usersWithoutUsername = await allQuery(`SELECT id, name, email, student_id FROM users WHERE username IS NULL OR username = ''`);
+    for (const u of usersWithoutUsername) {
+      let baseSlug = (u.name || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '') || (u.email ? u.email.split('@')[0].replace(/[^a-z0-9]/g, '-') : `user${u.id}`);
+
+      baseSlug = baseSlug.replace(/^(md|prof|dr)-/g, '').replace(/-(eee|cse|me|ce)$/g, '');
+      if (baseSlug.length < 3) baseSlug = `user-${u.id}`;
+
+      let candidate = baseSlug;
+      let counter = 1;
+      while (true) {
+        const existing = await getQuery(`SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id != ?`, [candidate, u.id]);
+        if (!existing) break;
+        candidate = `${baseSlug}-${counter}`;
+        counter++;
+      }
+      await runQuery(`UPDATE users SET username = ? WHERE id = ?`, [candidate, u.id]);
+      console.log(`👤 Assigned username "@${candidate}" to user "${u.name}" (ID: ${u.id})`);
+    }
+  } catch (err) {
+    console.warn('⚠️ Error ensuring usernames:', err.message);
+  }
+}
+
 
 async function seedInitialData() {
   try {
@@ -431,9 +514,9 @@ async function seedInitialData() {
       console.log('🌱 Seeded announcements');
     }
 
-    // Seed Users if empty
+    // Seed Users if empty (Never seed dummy users to live cloud database)
     const userCount = await getQuery('SELECT COUNT(*) as count FROM users');
-    if (userCount.count === 0) {
+    if (!tursoClient && userCount.count === 0) {
       const salt = await bcrypt.genSalt(10);
       const adminPass = await bcrypt.hash('admin123', salt);
       const memberPass = await bcrypt.hash('member123', salt);
@@ -544,9 +627,9 @@ async function seedInitialData() {
       console.log('🌱 Seeded default users with roles and member profiles');
     }
 
-    // Seed Committees and Committee Members if empty
+    // Seed Committees and Committee Members if empty (Never seed dummy committee members to live cloud database)
     const committeeCount = await getQuery('SELECT COUNT(*) as count FROM committees');
-    if (committeeCount.count === 0) {
+    if (!tursoClient && committeeCount.count === 0) {
       // Create Committee #1 (Current Running Committee)
       const res1 = await runQuery(
         `INSERT INTO committees (committee_number, title, session_years, is_current, theme_motto, description)
@@ -723,6 +806,45 @@ async function seedInitialData() {
       }
 
       console.log('🌱 Seeded Committee #1 and Committee #2 with categorized members');
+    }
+
+    // Seed Equipment Inventory if empty
+    const eqCount = await getQuery('SELECT COUNT(*) as count FROM equipment_inventory');
+    if (!eqCount || eqCount.count === 0) {
+      const initialEquipment = [
+        // Flagship Projects
+        { id: 'proj_aegis_rover', category: 'Flagship Projects', name: 'Aegis-1 Autonomous Ground Rover', spec: 'Full research rover with Jetson Orin + RPLiDAR S2', badge: 'FULL SYSTEM', type: 'project', total_stock: 1, available_stock: 1, status: 'available' },
+        { id: 'proj_valkyrie_drone', category: 'Flagship Projects', name: 'Valkyrie-X Quadrotor LiDAR Surveyor', spec: 'Complete aerial platform with Pixhawk 6X + 4K Gimbal', badge: 'FULL SYSTEM', type: 'project', total_stock: 1, available_stock: 1, status: 'available' },
+        { id: 'proj_robotic_arm', category: 'Flagship Projects', name: '6-Axis Articulated Manipulator Arm', spec: 'High-torque robotic arm with pneumatic 2-finger gripper', badge: 'FULL SYSTEM', type: 'project', total_stock: 1, available_stock: 1, status: 'available' },
+
+        // Microcontrollers & Compute
+        { id: 'dev_jetson_orin', category: 'Microcontrollers & Compute', name: 'NVIDIA Jetson Orin Nano (8GB)', spec: '40 TOPS AI compute board for ROS2 & computer vision', badge: 'COMPUTE', type: 'board', total_stock: 3, available_stock: 3, status: 'available' },
+        { id: 'dev_rpi5', category: 'Microcontrollers & Compute', name: 'Raspberry Pi 5 (8GB RAM)', spec: 'Quad-core 2.4GHz Arm Cortex-A76 SBC', badge: 'COMPUTE', type: 'board', total_stock: 5, available_stock: 5, status: 'available' },
+        { id: 'dev_esp32_s3', category: 'Microcontrollers & Compute', name: 'ESP32-S3 Dual-Core with WiFi & BLE', spec: 'Dual-core Xtensa 240MHz with vector AI acceleration', badge: 'EMBEDDED', type: 'board', total_stock: 8, available_stock: 8, status: 'available' },
+        { id: 'dev_arduino_uno', category: 'Microcontrollers & Compute', name: 'Arduino Uno R3 ATmega328P', spec: 'Standard 5V prototyping microcontroller with USB-B cable', badge: 'EMBEDDED', type: 'board', total_stock: 12, available_stock: 12, status: 'available' },
+        { id: 'dev_stm32f4', category: 'Microcontrollers & Compute', name: 'STM32F405 ARM Cortex-M4 Development Kit', spec: 'High-speed 168MHz MCU with CAN bus transceiver', badge: 'EMBEDDED', type: 'board', total_stock: 6, available_stock: 6, status: 'available' },
+
+        // Sensors & Actuators
+        { id: 'sens_rplidar_a2', category: 'Sensors & Actuators', name: 'RPLiDAR A2M8 360° 2D Laser Scanner', spec: '12-meter range, 8000 samples/sec for SLAM navigation', badge: 'SENSOR', type: 'sensor', total_stock: 3, available_stock: 3, status: 'available' },
+        { id: 'sens_realsense_d435', category: 'Sensors & Actuators', name: 'Intel RealSense D435i Active IR Depth Camera', spec: 'Stereo RGB-D camera with built-in 6-DOF IMU', badge: 'VISION', type: 'sensor', total_stock: 2, available_stock: 2, status: 'available' },
+        { id: 'sens_bno055', category: 'Sensors & Actuators', name: 'Bosch BNO055 9-DOF Absolute Orientation IMU', spec: 'Triaxial accelerometer, gyroscope, and geomagnetic sensor', badge: 'SENSOR', type: 'sensor', total_stock: 5, available_stock: 5, status: 'available' },
+        { id: 'act_mg996r', category: 'Sensors & Actuators', name: 'MG996R Metal Gear High-Torque Servo Set (4x)', spec: '11 kg/cm torque metal gear digital servos', badge: 'ACTUATOR', type: 'sensor', total_stock: 8, available_stock: 8, status: 'available' },
+
+        // Consumables & Prototyping
+        { id: 'con_jumper_wires', category: 'Consumables & Prototyping', name: 'Premium Jumper Wire Pack (120 Pcs)', spec: '40x M-M, 40x M-F, 40x F-F multi-color 20cm flexible cables', badge: 'WIRING', type: 'consumable', total_stock: 25, available_stock: 25, status: 'available' },
+        { id: 'con_breadboards', category: 'Consumables & Prototyping', name: 'Solderless Breadboard MB-102 (830 Tie Points)', spec: 'High-quality nickel-plated spring clips with power rails', badge: 'PROTOTYPING', type: 'consumable', total_stock: 20, available_stock: 20, status: 'available' },
+        { id: 'con_lipo_battery', category: 'Consumables & Prototyping', name: '3S 11.1V 2200mAh 35C LiPo Battery Pack', spec: 'High-discharge battery pack with XT60 connector', badge: 'POWER', type: 'consumable', total_stock: 6, available_stock: 6, status: 'available' },
+        { id: 'con_soldering_kit', category: 'Consumables & Prototyping', name: 'Lab Soldering Station & Precision Tweezer Access', spec: '60W temperature-controlled iron, solder flux, brass cleaner', badge: 'LAB TOOL', type: 'consumable', total_stock: 4, available_stock: 4, status: 'available' }
+      ];
+
+      for (const eq of initialEquipment) {
+        await runQuery(
+          `INSERT OR IGNORE INTO equipment_inventory (id, name, category, spec, badge, type, total_stock, available_stock, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [eq.id, eq.name, eq.category, eq.spec, eq.badge, eq.type, eq.total_stock, eq.available_stock, eq.status]
+        );
+      }
+      console.log('🌱 Seeded equipment inventory with default lab items');
     }
   } catch (err) {
     console.error('❌ Error during initial data seeding:', err);
@@ -945,5 +1067,6 @@ module.exports = {
   runQuery,
   getQuery,
   allQuery,
-  inferMemberCategory
+  inferMemberCategory,
+  initDatabase
 };

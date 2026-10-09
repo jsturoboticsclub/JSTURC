@@ -89,6 +89,9 @@
 
   html {
     height: 100%;
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: clip;
   }
 
   body {
@@ -97,7 +100,16 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     min-height: 100%;
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: clip;
     position: relative;
+  }
+
+  #root {
+    width: 100%;
+    max-width: 100vw;
+    min-height: 100%;
   }
 
   /* Hide scrollbars everywhere while keeping functionality */

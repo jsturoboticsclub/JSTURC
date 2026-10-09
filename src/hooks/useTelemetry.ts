@@ -1,48 +1,78 @@
 import { useState, useEffect } from 'react';
 
+export interface TelemetryConfig {
+  show?: boolean;
+  status_label?: string;
+  status_color?: 'amber' | 'emerald' | 'cyan' | 'rose' | 'blue';
+  active_platform?: string;
+  sub_badge?: string;
+  battery_voltage?: number | string;
+  current_draw?: number | string;
+  imu_pitch?: number | string;
+  imu_roll?: number | string;
+  wifi_rssi?: number | string;
+  sys_health?: string;
+  tournament_title?: string;
+  tournament_date?: string;
+  show_countdown?: boolean;
+}
+
 export interface TelemetryData {
   labMode: 'ACTIVE_PROTOTYPING' | 'AUTONOMOUS_RUN' | 'STANDBY_CHARGING' | 'BENCH_TESTING';
   labModeLabel: string;
   activePlatform: string;
-  batteryLevel: number; // percentage
-  batteryVoltage: number; // volts
-  currentDraw: number; // amps
+  subBadge: string;
+  statusColor: 'amber' | 'emerald' | 'cyan' | 'rose' | 'blue';
+  batteryLevel: number;
+  batteryVoltage: number;
+  currentDraw: number;
   imu: {
     pitch: number;
     roll: number;
     yaw: number;
   };
-  wifiRssi: number; // dBm
+  wifiRssi: number;
   rosNodes: {
     active: number;
     total: number;
   };
-  cpuTemp: number; // Celsius
+  cpuTemp: number;
   safetyState: 'NOMINAL' | 'CAUTION' | 'RESTRICTED';
   tournament: {
     title: string;
-    targetDate: string; // ISO string
+    targetDate: string;
     daysLeft: number;
     hoursLeft: number;
     minutesLeft: number;
     secondsLeft: number;
   };
+  showCountdown: boolean;
 }
 
-export function useTelemetry(targetDateStr: string = '2026-11-15T09:00:00Z') {
+export function useTelemetry(config?: TelemetryConfig, fallbackDate: string = '2026-11-15T09:00:00Z') {
+  const targetDateStr = config?.tournament_date || fallbackDate;
+  const targetTitle = config?.tournament_title || "ROBOSUMMIT '26";
+
   const [telemetry, setTelemetry] = useState<TelemetryData>(() => ({
     labMode: 'ACTIVE_PROTOTYPING',
-    labModeLabel: 'Active Prototyping // Lab Zone A',
-    activePlatform: 'ARES-IV Heavy Autonomous Rover',
+    labModeLabel: config?.status_label || 'Active Prototyping · Lab Zone A',
+    activePlatform: config?.active_platform || 'ARES-IV Heavy Autonomous Rover',
+    subBadge: config?.sub_badge || 'ROS2 Humble · 22 Nodes',
+    statusColor: config?.status_color || 'amber',
     batteryLevel: 94,
-    batteryVoltage: 24.6,
-    currentDraw: 4.2,
-    imu: { pitch: 1.2, roll: -0.4, yaw: 112.5 },
-    wifiRssi: -52,
+    batteryVoltage: config?.battery_voltage ? parseFloat(String(config.battery_voltage)) || 24.6 : 24.6,
+    currentDraw: config?.current_draw ? parseFloat(String(config.current_draw)) || 4.2 : 4.2,
+    imu: {
+      pitch: config?.imu_pitch !== undefined ? parseFloat(String(config.imu_pitch)) || 1.2 : 1.2,
+      roll: config?.imu_roll !== undefined ? parseFloat(String(config.imu_roll)) || -0.4 : -0.4,
+      yaw: 112.5
+    },
+    wifiRssi: config?.wifi_rssi !== undefined ? parseInt(String(config.wifi_rssi), 10) || -52 : -52,
     rosNodes: { active: 22, total: 22 },
     cpuTemp: 38.4,
     safetyState: 'NOMINAL',
-    tournament: calculateCountdown(targetDateStr, 'National Autonomous Robotics Championship 2026'),
+    tournament: calculateCountdown(targetDateStr, targetTitle),
+    showCountdown: config?.show_countdown !== false,
   }));
 
   function calculateCountdown(dateStr: string, title: string) {
@@ -64,6 +94,20 @@ export function useTelemetry(targetDateStr: string = '2026-11-15T09:00:00Z') {
       secondsLeft: seconds,
     };
   }
+
+  // Sync state if config changes
+  useEffect(() => {
+    setTelemetry(prev => ({
+      ...prev,
+      labModeLabel: config?.status_label || prev.labModeLabel,
+      activePlatform: config?.active_platform || prev.activePlatform,
+      subBadge: config?.sub_badge || prev.subBadge,
+      statusColor: config?.status_color || prev.statusColor,
+      tournament: calculateCountdown(targetDateStr, targetTitle),
+      showCountdown: config?.show_countdown !== false,
+      wifiRssi: config?.wifi_rssi !== undefined ? parseInt(String(config.wifi_rssi), 10) || prev.wifiRssi : prev.wifiRssi,
+    }));
+  }, [config, targetDateStr, targetTitle]);
 
   useEffect(() => {
     // Dynamic stochastic physics ticker simulating active robot telemetry

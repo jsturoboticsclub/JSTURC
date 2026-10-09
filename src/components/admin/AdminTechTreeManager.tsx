@@ -4,6 +4,7 @@ import {
   Save, Plus, Edit2, Trash2, X, Check, Activity, Network, 
   BookOpen, Clock, User, Play, ExternalLink, Sparkles, CheckCircle2, Shield 
 } from 'lucide-react';
+import { AdminModalWrapper } from './AdminModalWrapper';
 
 export const AdminTechTreeManager: React.FC = () => {
   const [nodes, setNodes] = useState<TechSkillNode[]>([]);
@@ -336,7 +337,7 @@ export const AdminTechTreeManager: React.FC = () => {
 
       {/* Course Editor Modal */}
       {editingNode && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
+        <AdminModalWrapper isOpen={!!editingNode} onClose={() => setEditingNode(null)}>
           <div className="bg-white dark:bg-[#0D1424] border border-slate-200 dark:border-slate-800 rounded-3xl max-w-3xl w-full p-6 sm:p-8 space-y-6 my-auto max-h-[90vh] overflow-y-auto shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
               <div>
@@ -556,7 +557,7 @@ export const AdminTechTreeManager: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </AdminModalWrapper>
       )}
     </div>
   );

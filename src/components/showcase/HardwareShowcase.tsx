@@ -123,7 +123,7 @@ export const HardwareShowcase: React.FC = () => {
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <span className="px-2.5 py-0.5 rounded-md text-[10px] font-mono font-black uppercase tracking-wider bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
-                    JSTU LABS // SPECIFICATION
+                    JSTU LABS · SPECIFICATION
                   </span>
                   {currentItem.badge && (
                     <span className="px-2.5 py-0.5 rounded-md text-[10px] font-mono font-black uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">

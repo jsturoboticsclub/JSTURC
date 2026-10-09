@@ -43,3 +43,7 @@ turso token.txt
 *.njsproj
 *.sln
 *.sw?
+
+# Secrets and Credentials
+*secret*.json
+Robotics_secret.json

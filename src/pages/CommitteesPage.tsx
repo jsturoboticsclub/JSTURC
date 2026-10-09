@@ -8,6 +8,7 @@ import {
 import JSTUHeader from '../components/JSTUHeader';
 import ScrollReveal from '../components/ScrollReveal';
 import { SkeletonHero } from '../components/SkeletonLoader';
+import { getStoredUser } from '../lib/auth';
 
 interface CommitteeItem {
   id: number;
@@ -59,14 +60,7 @@ export const CommitteesPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
 
   // Current session
-  const currentUser = (() => {
-    try {
-      const saved = localStorage.getItem('user');
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      return null;
-    }
-  })();
+  const currentUser = getStoredUser();
 
   useEffect(() => {
     fetchCommittees();
@@ -473,7 +467,7 @@ export const CommitteesPage: React.FC = () => {
                           </span>
 
                           <Link
-                            to={`/members/${m.user_id || m.id}`}
+                            to={`/${m.username || `members/${m.user_id || m.id}`}`}
                             className="inline-flex items-center gap-1 font-bold text-indigo-600 dark:text-indigo-400 hover:underline text-xs"
                           >
                             <span>Profile</span>

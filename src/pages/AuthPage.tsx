@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Cpu, ShieldCheck, UserCheck, LogIn, ArrowRight, ArrowLeft, CheckCircle2, AlertCircle, Sparkles, KeyRound, Mail, Lock } from 'lucide-react';
 import JSTUHeader from '../components/JSTUHeader';
+import { setStoredAuth } from '../lib/auth';
 
 export const AuthPage: React.FC = () => {
   const navigate = useNavigate();
@@ -45,8 +46,7 @@ export const AuthPage: React.FC = () => {
         throw new Error(data.error || 'Invalid credentials');
       }
 
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      setStoredAuth(data.user, data.token);
 
       if (redirectTo) {
         if (redirectTo.startsWith('/admin')) {
@@ -108,8 +108,7 @@ export const AuthPage: React.FC = () => {
                 setSuccess(data.message || '🕒 Registration Received! Awaiting Admin approval.');
                 return;
               }
-              localStorage.setItem('token', data.token);
-              localStorage.setItem('user', JSON.stringify(data.user));
+              setStoredAuth(data.user, data.token);
               if (data.user.role === 'Admin') navigate('/admin');
               else navigate('/dashboard');
             } catch (err: any) {
@@ -185,8 +184,7 @@ export const AuthPage: React.FC = () => {
         return;
       }
 
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      setStoredAuth(data.user, data.token);
 
       if (data.user.role === 'Admin') {
         navigate('/admin');

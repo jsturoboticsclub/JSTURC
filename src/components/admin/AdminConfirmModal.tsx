@@ -1,5 +1,7 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, ShieldAlert, LogOut, Check, X } from 'lucide-react';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 export interface ConfirmModalConfig {
   isOpen: boolean;
@@ -24,7 +26,9 @@ export const AdminConfirmModal: React.FC<ConfirmModalConfig> = ({
   onConfirm,
   onCancel,
 }) => {
-  if (!isOpen) return null;
+  useBodyScrollLock(isOpen);
+
+  if (!isOpen || typeof document === 'undefined') return null;
 
   const variantIcons = {
     danger: <ShieldAlert className="w-8 h-8 text-rose-500" />,
@@ -38,9 +42,15 @@ export const AdminConfirmModal: React.FC<ConfirmModalConfig> = ({
     info: 'bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black shadow-cyan-500/30',
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150">
-      <div className="w-full max-w-md bg-slate-950 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5 relative">
+  return createPortal(
+    <div 
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-xl animate-in fade-in duration-150"
+      onClick={onCancel}
+    >
+      <div 
+        className="w-full max-w-md bg-slate-950 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5 relative"
+        onClick={(e) => e.stopPropagation()}
+      >
         <button
           onClick={onCancel}
           className="absolute top-5 right-5 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
@@ -93,6 +103,7 @@ export const AdminConfirmModal: React.FC<ConfirmModalConfig> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

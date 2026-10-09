@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   ShieldCheck, LayoutDashboard, Sliders, Users, FileText,
   FolderGit2, Award, Bell, ChevronLeft, ChevronRight,
-  LogOut, ExternalLink, Activity, Sparkles, Sun, Moon, Network, Cpu
+  LogOut, ExternalLink, Activity, Sparkles, Sun, Moon, Network, Cpu, Wrench, QrCode
 } from 'lucide-react';
 import { AdminConfirmModal } from './AdminConfirmModal';
 import { CyberBadge } from '../common/CyberPrimitives';
 
-export type AdminTab = 'superpower' | 'hardware' | 'techtree' | 'content' | 'committees' | 'users' | 'projects' | 'roles' | 'announcements';
+export type AdminTab = 'superpower' | 'hardware' | 'loans' | 'checkins' | 'techtree' | 'content' | 'committees' | 'users' | 'projects' | 'roles' | 'announcements';
 
 interface AdminLayoutProps {
   activeTab: AdminTab;
@@ -27,6 +27,14 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string>('/logo.jpg');
+  const mainContentRef = useRef<HTMLElement>(null);
+
+  // Automatically scroll main viewport to top on tab change
+  useEffect(() => {
+    if (mainContentRef.current) {
+      mainContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     fetch('/api/site-content')
@@ -62,6 +70,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const menuItems = [
     { id: 'superpower' as AdminTab, label: 'Superpower Matrix', icon: <Sliders className="w-4 h-4" /> },
     { id: 'hardware' as AdminTab, label: 'Hardware Showcase', icon: <Cpu className="w-4 h-4" /> },
+    { id: 'loans' as AdminTab, label: 'Equipment Loans', icon: <Wrench className="w-4 h-4" /> },
+    { id: 'checkins' as AdminTab, label: 'Workshop Check-In', icon: <QrCode className="w-4 h-4" /> },
     { id: 'techtree' as AdminTab, label: 'Curriculum & Courses', icon: <Network className="w-4 h-4" /> },
     { id: 'content' as AdminTab, label: 'Landing CMS Passages', icon: <FileText className="w-4 h-4" /> },
     { id: 'users' as AdminTab, label: 'Member Directory', icon: <Users className="w-4 h-4" /> },
@@ -76,6 +86,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
       localStorage.removeItem('user');
       localStorage.removeItem('authUser');
       localStorage.removeItem('token');
+      localStorage.removeItem('authToken');
     } catch (e) {
       // ignore
     }
@@ -87,16 +98,16 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const currentLabel = menuItems.find((m) => m.id === activeTab)?.label || 'Dashboard';
 
   return (
-    <div className={`min-h-screen flex flex-col font-sans transition-colors duration-200 ${
+    <div className={`h-screen flex flex-col font-sans transition-colors duration-200 overflow-hidden ${
       isDark ? 'dark bg-[#070B14] text-slate-100' : 'bg-slate-100 text-slate-900'
     }`}>
-      {/* Top Command Bar */}
-      <header className={`h-16 border-b px-4 sm:px-6 flex items-center justify-between sticky top-0 z-40 backdrop-blur-md transition-colors ${
+      {/* Top Command Bar - Fixed at top of viewport */}
+      <header className={`h-16 flex-shrink-0 border-b px-4 sm:px-6 flex items-center justify-between z-40 backdrop-blur-md transition-colors ${
         isDark 
           ? 'bg-[#0D1424]/95 border-slate-800 text-white' 
           : 'bg-white/95 border-slate-200 text-slate-900 shadow-xs'
       }`}>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <Link to="/" className="flex items-center gap-2.5 group">
             <div className="w-9 h-9 rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 flex items-center justify-center shadow-xs flex-shrink-0">
               <img
@@ -116,13 +127,32 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           </Link>
 
           <ChevronRight className={`w-3.5 h-3.5 hidden sm:inline ${isDark ? 'text-slate-600' : 'text-slate-400'}`} />
-          <span className="text-xs font-mono text-indigo-600 dark:text-indigo-400 font-bold hidden sm:inline">
+          <span className="text-xs font-mono text-indigo-600 dark:text-indigo-400 font-bold hidden md:inline">
             {currentLabel}
           </span>
+
+          {/* Quick Tab Selector for Mobile / Small Screens */}
+          <div className="lg:hidden ml-1">
+            <select
+              value={activeTab}
+              onChange={(e) => onTabChange(e.target.value as AdminTab)}
+              className={`text-xs font-mono font-bold px-2 py-1 rounded-xl border focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer ${
+                isDark 
+                  ? 'bg-slate-900 border-slate-800 text-indigo-400' 
+                  : 'bg-slate-100 border-slate-300 text-indigo-700'
+              }`}
+            >
+              {menuItems.map(m => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Right header controls */}
-        <div className="flex items-center gap-2.5 sm:gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           {/* Theme Toggle Button */}
           <button
             onClick={toggleAdminTheme}
@@ -153,7 +183,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
               : 'bg-slate-50 border-slate-200 text-slate-700'
           }`}>
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>TURSO CLOUD // ACTIVE</span>
+            <span>SQLITE CLOUD · ONLINE</span>
           </div>
 
           {/* Live Site Link */}
@@ -198,11 +228,11 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
         </div>
       </header>
 
-      {/* Main Workspace Body with Sticky Viewport Sidebar */}
-      <div className="flex-1 flex relative">
-        {/* Sticky Viewport Sidebar - Scrolls with view so admin never has to scroll up */}
+      {/* Main Workspace Body with Fixed Viewport Sidebar */}
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Fixed Pinned Sidebar - 100% viewport height, never scrolls away! */}
         <aside
-          className={`sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto flex-shrink-0 z-30 transition-all duration-300 flex flex-col justify-between border-r ${
+          className={`h-full overflow-y-auto flex-shrink-0 z-30 transition-all duration-300 flex flex-col justify-between border-r ${
             isDark 
               ? 'bg-[#0D1424] border-slate-800' 
               : 'bg-white border-slate-200 shadow-xs'
@@ -256,10 +286,38 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
           </div>
         </aside>
 
-        {/* Content View Area */}
-        <main className={`flex-1 min-w-0 p-4 sm:p-8 transition-colors ${
-          isDark ? 'bg-[#070B14] text-slate-100' : 'bg-slate-50 text-slate-900'
-        }`}>
+        {/* Content View Area: Scrolls independently while sidebar stays pinned */}
+        <main
+          ref={mainContentRef}
+          className={`flex-1 h-full overflow-y-auto min-w-0 p-4 sm:p-8 transition-colors ${
+            isDark ? 'bg-[#070B14] text-slate-100' : 'bg-slate-50 text-slate-900'
+          }`}
+        >
+          {/* Sticky Horizontal Mobile Tab Bar for rapid navigation without scrolling to top */}
+          <div className={`lg:hidden sticky -top-4 sm:-top-8 -mt-4 sm:-mt-8 -mx-4 sm:-mx-8 mb-6 z-20 border-b px-3 py-2.5 overflow-x-auto scrollbar-hide flex items-center gap-1.5 backdrop-blur-md transition-colors ${
+            isDark ? 'bg-[#0D1424]/95 border-slate-800' : 'bg-white/95 border-slate-200 shadow-xs'
+          }`}>
+            {menuItems.map((item) => {
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => onTabChange(item.id)}
+                  className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition-all whitespace-nowrap ${
+                    isActive
+                      ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-sm'
+                      : isDark
+                        ? 'text-slate-400 hover:text-white bg-slate-900/60 border border-slate-800'
+                        : 'text-slate-600 hover:text-slate-900 bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  <span className="flex-shrink-0">{item.icon}</span>
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
           <div className="max-w-7xl mx-auto">
             {children}
           </div>

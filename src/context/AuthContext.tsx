@@ -32,15 +32,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const getAuthHeaders = () => {
     // Try both sessionStorage and localStorage for token
-    const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
+    const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken') || localStorage.getItem('token');
     return token ? { 'Authorization': `Bearer ${token}` } : {};
   };
 
   const checkAuth = async () => {
     try {
       // Check both sessionStorage and localStorage for token and user
-      const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken');
-      const storedUser = sessionStorage.getItem('user');
+      const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken') || localStorage.getItem('token');
+      const storedUser = sessionStorage.getItem('user') || localStorage.getItem('user') || localStorage.getItem('authUser');
       
       // If we have stored user data, use it immediately to avoid null state
       if (storedUser) {

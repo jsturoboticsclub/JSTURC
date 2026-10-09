@@ -6,6 +6,8 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { AdminConfirmModal } from './admin/AdminConfirmModal';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
+import { useAuthSync, clearStoredAuth } from '../lib/auth';
 
 interface JSTUHeaderProps {
   currentUser?: any;
@@ -23,6 +25,12 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
   const navigate = useNavigate();
   const { isDarkMode, toggleDarkMode } = useTheme();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  useBodyScrollLock(isMobileMenuOpen || showLogoutConfirm);
+
+  // Synchronize authenticated user across all storage keys and pages
+  const { user: syncedUser } = useAuthSync();
+  const activeUser = currentUser || syncedUser;
 
   const [siteBranding, setSiteBranding] = useState(branding || {
     title: 'JSTU Robotics Club',
@@ -46,16 +54,12 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
     }
   }, [branding]);
 
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-
   const handleLogout = () => {
     setShowLogoutConfirm(true);
   };
 
   const executeLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('authUser');
+    clearStoredAuth();
     if (onLogout) onLogout();
     setShowLogoutConfirm(false);
     navigate('/');
@@ -68,6 +72,10 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
     const updateActive = () => {
       if (location.pathname.startsWith('/committees')) {
         setActiveSection('committees');
+        return;
+      }
+      if (location.pathname.startsWith('/loans')) {
+        setActiveSection('loans');
         return;
       }
       if (location.pathname !== '/') {
@@ -136,6 +144,7 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
     { id: 'projects', label: 'Projects', sectionId: 'projects' },
     { id: 'directory', label: 'Member Directory', sectionId: 'directory' },
     { id: 'committees', label: 'Committees', route: '/committees' },
+    { id: 'loans', label: 'Lab & Equipment Loans', route: '/loans' },
   ];
 
   const handleNavClick = (e: React.MouseEvent, link: any) => {
@@ -193,7 +202,7 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
   };
 
   return (
-    <header className={`sticky top-0 z-50 transition-all duration-300 ${
+    <header className={`sticky top-0 z-50 w-full transition-all duration-300 overflow-x-clip ${
       isScrolled 
         ? 'bg-white/95 dark:bg-[#070B14]/95 backdrop-blur-2xl border-b border-slate-200/90 dark:border-slate-800/90 shadow-md shadow-indigo-950/5 dark:shadow-indigo-950/20' 
         : 'bg-white/80 dark:bg-[#070B14]/80 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-800/50 shadow-none'
@@ -206,36 +215,36 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
         />
       </div>
 
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-        <div className={`flex items-center justify-between gap-2 lg:gap-4 transition-all duration-300 ${isScrolled ? 'h-14 sm:h-16' : 'h-16 sm:h-20'}`}>
+      <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 xl:px-8">
+        <div className={`flex items-center justify-between gap-2 lg:gap-3 xl:gap-4 transition-all duration-300 ${isScrolled ? 'h-14 sm:h-16' : 'h-16 sm:h-20'}`}>
           
           {/* Brand Logo & Name (Admin Configurable) */}
-          <Link to="/" className="flex items-center gap-2 sm:gap-3 group min-w-0 pr-1 lg:pr-2 flex-shrink-0">
+          <Link to="/" className="flex items-center gap-2 sm:gap-2.5 group min-w-0 pr-1 flex-shrink-0">
             <img
               src={siteBranding.image_url || '/logo.jpg'}
               alt="JSTU Robotics Club Official Logo"
-              className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl object-cover shadow-sm shadow-indigo-500/20 group-hover:scale-105 transition-all duration-300 border-2 border-indigo-500/40 dark:border-indigo-400/30 flex-shrink-0 bg-white"
+              className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl object-cover shadow-sm shadow-indigo-500/20 group-hover:scale-105 transition-all duration-300 border-2 border-indigo-500/40 dark:border-indigo-400/30 flex-shrink-0 bg-white"
               onError={(e) => {
                 (e.target as HTMLImageElement).src = '/logo.jpg';
               }}
             />
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="font-black text-sm sm:text-base xl:text-lg tracking-tight text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors whitespace-nowrap">
+              <div className="flex items-center gap-1 sm:gap-1.5">
+                <span className="font-black text-xs sm:text-sm xl:text-base 2xl:text-lg tracking-tight text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors whitespace-nowrap">
                   {siteBranding.title || 'JSTU Robotics'}
                 </span>
-                <span className="hidden 2xl:inline-flex px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-full shadow-xs flex-shrink-0">
+                <span className="hidden 2xl:inline-flex px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-full shadow-xs flex-shrink-0">
                   {siteBranding.badge || 'Club'}
                 </span>
               </div>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium hidden 2xl:block truncate max-w-xs">
+              <p className="text-[10px] xl:text-[11px] text-slate-500 dark:text-slate-400 font-medium hidden 2xl:block truncate max-w-xs">
                 {siteBranding.subtitle || 'Jamalpur Science & Technology University'}
               </p>
             </div>
           </Link>
 
-          {/* Desktop Navigation Links */}
-          <nav className="hidden lg:flex items-center gap-0.5 xl:gap-1 bg-slate-100/80 dark:bg-slate-900/80 p-1 xl:p-1.5 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs flex-shrink-0">
+          {/* Desktop Navigation Links - Responsive compact labels */}
+          <nav className="hidden lg:flex items-center gap-0.5 xl:gap-1 bg-slate-100/80 dark:bg-slate-900/80 p-0.5 xl:p-1 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-xs">
             {navLinks.map((link) => {
               const isSelected = activeSection === link.id;
               return (
@@ -243,16 +252,25 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
                   key={link.id}
                   href={link.route || '/'}
                   onClick={(e) => handleNavClick(e, link)}
-                  className={`h-8 xl:h-9 px-2.5 xl:px-3.5 rounded-xl text-xs xl:text-[13px] font-bold whitespace-nowrap flex items-center justify-center gap-1.5 transition-all duration-200 ease-out select-none cursor-pointer ${
+                  className={`h-8 xl:h-8.5 px-2 xl:px-2.5 2xl:px-3.5 rounded-xl text-[11px] xl:text-xs 2xl:text-[13px] font-bold whitespace-nowrap flex items-center justify-center gap-1 xl:gap-1.5 transition-all duration-200 ease-out select-none cursor-pointer ${
                     isSelected
                       ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm border border-slate-200/80 dark:border-indigo-500/30 scale-100'
-                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60 hover:scale-105 active:scale-95 border border-transparent'
+                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60 active:scale-95 border border-transparent'
                   }`}
                 >
                   {isSelected && (
                     <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400 animate-pulse flex-shrink-0" />
                   )}
-                  {link.id === 'directory' ? (
+                  {link.id === 'loans' ? (
+                    <span>
+                      <span className="hidden 2xl:inline">Lab & Equipment </span>
+                      <span className="inline 2xl:hidden">Lab </span>Loans
+                    </span>
+                  ) : link.id === 'agenda' ? (
+                    <span>
+                      <span className="hidden xl:inline">About & </span>Agenda
+                    </span>
+                  ) : link.id === 'directory' ? (
                     <span>
                       <span className="hidden xl:inline">Member </span>Directory
                     </span>
@@ -265,11 +283,11 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
           </nav>
 
           {/* Right Actions & Theme Switcher (Desktop) */}
-          <div className="hidden lg:flex items-center gap-1.5 xl:gap-2.5 flex-shrink-0">
+          <div className="hidden lg:flex items-center gap-1.5 xl:gap-2 flex-shrink-0">
             {/* Theme Toggle Button - Sleek icon-only toggle */}
             <button
               onClick={toggleDarkMode}
-              className="w-8 h-8 xl:w-9 xl:h-9 rounded-xl bg-slate-100/90 hover:bg-slate-200/90 dark:bg-slate-800/90 dark:hover:bg-slate-700/90 text-slate-700 dark:text-amber-300 border border-slate-200/80 dark:border-slate-700/80 transition-all duration-200 text-xs font-bold shadow-xs hover:scale-105 active:scale-95 flex items-center justify-center flex-shrink-0"
+              className="w-8 h-8 xl:w-8.5 xl:h-8.5 rounded-xl bg-slate-100/90 hover:bg-slate-200/90 dark:bg-slate-800/90 dark:hover:bg-slate-700/90 text-slate-700 dark:text-amber-300 border border-slate-200/80 dark:border-slate-700/80 transition-all duration-200 text-xs font-bold shadow-xs hover:scale-105 active:scale-95 flex items-center justify-center flex-shrink-0"
               title={isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
               aria-label="Toggle public theme"
             >
@@ -280,44 +298,44 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
               )}
             </button>
 
-            {currentUser ? (
+            {activeUser ? (
               <div className="flex items-center gap-1.5 xl:gap-2">
-                {currentUser.role === 'Admin' && (
+                {activeUser.role === 'Admin' && (
                   <Link
                     to="/admin"
-                    className="h-8 xl:h-9 flex items-center justify-center gap-1.5 px-2.5 xl:px-3 rounded-xl bg-gradient-to-r from-amber-500/20 via-orange-500/15 to-amber-500/20 border border-amber-500/40 text-amber-800 dark:text-amber-300 text-xs font-black hover:bg-amber-500/25 hover:scale-105 active:scale-95 transition-all shadow-xs whitespace-nowrap"
+                    className="h-8 xl:h-8.5 flex items-center justify-center gap-1.5 px-2 xl:px-2.5 rounded-xl bg-gradient-to-r from-amber-500/20 via-orange-500/15 to-amber-500/20 border border-amber-500/40 text-amber-800 dark:text-amber-300 text-xs font-black hover:bg-amber-500/25 active:scale-95 transition-all shadow-xs whitespace-nowrap"
                     title="Access Admin CMS"
                   >
-                    <ShieldCheck className="w-3.5 h-3.5 xl:w-4 xl:h-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-                    <span>Admin CMS</span>
+                    <ShieldCheck className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                    <span>Admin</span>
                   </Link>
                 )}
 
                 <Link
                   to="/dashboard"
-                  className="h-8 xl:h-9 flex items-center justify-center gap-1.5 px-2.5 xl:px-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/60 text-indigo-700 dark:text-indigo-300 text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/60 hover:scale-105 active:scale-95 transition-all shadow-xs whitespace-nowrap"
+                  className="h-8 xl:h-8.5 flex items-center justify-center gap-1.5 px-2.5 xl:px-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800/60 text-indigo-700 dark:text-indigo-300 text-xs font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/60 active:scale-95 transition-all shadow-xs whitespace-nowrap"
                   title="Member Dashboard"
                 >
-                  <LayoutDashboard className="w-3.5 h-3.5 xl:w-4 xl:h-4 text-indigo-600 dark:text-indigo-400 flex-shrink-0" />
+                  <LayoutDashboard className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 flex-shrink-0" />
                   <span>Dashboard</span>
                 </Link>
 
                 <div className="flex items-center gap-1.5 pl-1.5 border-l border-slate-200 dark:border-slate-800">
                   <img
-                    src={currentUser.profile_photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUser.name}`}
-                    alt={currentUser.name}
+                    src={activeUser.profile_photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${activeUser.name}`}
+                    alt={activeUser.name}
                     className="w-7 h-7 xl:w-8 xl:h-8 rounded-full border-2 border-indigo-500/40 object-cover shadow-xs"
                   />
                   <div className="text-left hidden 2xl:block">
-                    <p className="text-xs font-bold text-slate-900 dark:text-white leading-tight truncate max-w-[90px]">{currentUser.name}</p>
-                    <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono font-bold uppercase">{currentUser.role}</span>
+                    <p className="text-xs font-bold text-slate-900 dark:text-white leading-tight truncate max-w-[90px]">{activeUser.name}</p>
+                    <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-mono font-bold uppercase">{activeUser.role}</span>
                   </div>
                   <button
                     onClick={handleLogout}
-                    className="p-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 text-slate-400 hover:text-red-600 hover:scale-110 active:scale-90 transition-all"
+                    className="p-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 text-slate-400 hover:text-red-600 active:scale-90 transition-all"
                     title="Sign Out"
                   >
-                    <LogOut className="w-3.5 h-3.5 xl:w-4 xl:h-4" />
+                    <LogOut className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
@@ -325,18 +343,20 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
               <div className="flex items-center gap-1.5 xl:gap-2">
                 <Link
                   to="/auth"
-                  className="h-8 xl:h-9 px-3 xl:px-3.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-white hover:bg-slate-100/90 dark:hover:bg-slate-800/90 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all duration-200 flex items-center justify-center gap-1.5 whitespace-nowrap hover:scale-105 active:scale-95 shadow-xs"
+                  className="h-8 xl:h-8.5 px-2.5 xl:px-3 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-white hover:bg-slate-100/90 dark:hover:bg-slate-800/90 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all duration-200 flex items-center justify-center gap-1.5 whitespace-nowrap active:scale-95 shadow-xs"
                 >
-                  <LogIn className="w-3.5 h-3.5 xl:w-4 xl:h-4 text-indigo-600 dark:text-indigo-400 flex-shrink-0" />
+                  <LogIn className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 flex-shrink-0" />
                   <span>Sign In</span>
                 </Link>
 
                 <a
                   href="/"
                   onClick={handleJoinClick}
-                  className="h-8 xl:h-9 px-3.5 xl:px-4 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-md shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-105 active:scale-95 transition-all duration-200 flex items-center justify-center gap-1.5 whitespace-nowrap group cursor-pointer"
+                  className="h-8 xl:h-8.5 px-3 xl:px-4 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-md shadow-indigo-500/25 hover:shadow-indigo-500/40 active:scale-95 transition-all duration-200 flex items-center justify-center gap-1.5 whitespace-nowrap group cursor-pointer"
                 >
-                  <span>Apply to Join</span>
+                  <span>
+                    <span className="hidden xl:inline">Apply to </span>Join
+                  </span>
                   <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform duration-200 flex-shrink-0" />
                 </a>
               </div>
@@ -367,14 +387,14 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
       {/* Mobile Drawer Overlay Backdrop */}
       {isMobileMenuOpen && (
         <div 
-          className="fixed inset-0 top-16 z-40 bg-black/40 backdrop-blur-xs lg:hidden animate-in fade-in duration-200"
+          className="fixed inset-0 top-16 z-40 bg-black/60 backdrop-blur-md lg:hidden animate-in fade-in duration-200"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
 
       {/* Mobile Drawer Menu */}
       {isMobileMenuOpen && (
-        <div className="lg:hidden relative z-50 bg-white dark:bg-[#080C16] border-b border-slate-200 dark:border-slate-800 px-4 pt-3 pb-6 space-y-3 shadow-xl max-h-[calc(100vh-4rem)] overflow-y-auto animate-in slide-in-from-top-2 duration-200">
+        <div className="lg:hidden relative z-50 bg-white dark:bg-[#080C16] border-b border-slate-200 dark:border-slate-800 px-4 pt-3 pb-6 space-y-3 shadow-xl max-h-[calc(100vh-4rem)] overflow-y-auto overscroll-contain animate-in slide-in-from-top-2 duration-200">
           
           {/* User Status Card (Mobile Drawer Header) */}
           {currentUser && (
@@ -441,8 +461,21 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
               </button>
             </div>
 
-            {currentUser ? (
+            {activeUser ? (
               <div className="space-y-2 pt-1">
+                {/* Mobile User Profile Header Card */}
+                <div className="flex items-center gap-3 p-3 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/60 mb-1">
+                  <img
+                    src={activeUser.profile_photo || `https://api.dicebear.com/7.x/bottts/svg?seed=${activeUser.name}`}
+                    alt={activeUser.name}
+                    className="w-10 h-10 rounded-full border-2 border-indigo-500/40 object-cover shadow-xs"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{activeUser.name}</p>
+                    <span className="text-xs text-indigo-600 dark:text-indigo-400 font-mono font-bold uppercase">{activeUser.role || 'Member'}</span>
+                  </div>
+                </div>
+
                 <Link
                   to="/dashboard"
                   onClick={() => setIsMobileMenuOpen(false)}
@@ -455,7 +488,7 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
                   <ChevronRight className="w-4 h-4" />
                 </Link>
 
-                {currentUser.role === 'Admin' && (
+                {activeUser.role === 'Admin' && (
                   <Link
                     to="/admin"
                     onClick={() => setIsMobileMenuOpen(false)}
@@ -508,8 +541,8 @@ export const JSTUHeader: React.FC<JSTUHeaderProps> = ({ currentUser, onLogout, b
         cancelLabel="Stay Signed In"
         variant="warning"
         details={[
-          { label: 'Active User', value: currentUser?.name || 'Authorized Member' },
-          { label: 'Role Privileges', value: currentUser?.role || 'Member' }
+          { label: 'Active User', value: activeUser?.name || 'Authorized Member' },
+          { label: 'Role Privileges', value: activeUser?.role || 'Member' }
         ]}
         onConfirm={executeLogout}
         onCancel={() => setShowLogoutConfirm(false)}
