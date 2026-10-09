@@ -1,5 +1,7 @@
-const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+require('dotenv').config();
+const sqlite3 = require('sqlite3').verbose();
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
 
@@ -37,17 +39,24 @@ if (tursoUrl && tursoAuthToken) {
   });
 }
 
+// Sanitize SQL parameter arrays so undefined values never trigger hrana protocol TypeErrors
+function sanitizeParams(params) {
+  if (!Array.isArray(params)) return params;
+  return params.map(p => (p === undefined ? null : p));
+}
+
 // Promisified query helpers (Works seamlessly with Turso Cloud or local SQLite)
 async function runQuery(sql, params = []) {
+  const safeParams = sanitizeParams(params);
   if (tursoClient) {
-    const res = await tursoClient.execute({ sql, args: params });
+    const res = await tursoClient.execute({ sql, args: safeParams });
     return {
       id: res.lastInsertRowid != null ? Number(res.lastInsertRowid) : undefined,
       changes: res.rowsAffected
     };
   }
   return new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
+    db.run(sql, safeParams, function (err) {
       if (err) reject(err);
       else resolve({ id: this.lastID, changes: this.changes });
     });
@@ -55,13 +64,14 @@ async function runQuery(sql, params = []) {
 }
 
 async function getQuery(sql, params = []) {
+  const safeParams = sanitizeParams(params);
   if (tursoClient) {
-    const res = await tursoClient.execute({ sql, args: params });
+    const res = await tursoClient.execute({ sql, args: safeParams });
     if (!res.rows || res.rows.length === 0) return null;
     return { ...res.rows[0] };
   }
   return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
+    db.get(sql, safeParams, (err, row) => {
       if (err) reject(err);
       else resolve(row);
     });
@@ -69,12 +79,13 @@ async function getQuery(sql, params = []) {
 }
 
 async function allQuery(sql, params = []) {
+  const safeParams = sanitizeParams(params);
   if (tursoClient) {
-    const res = await tursoClient.execute({ sql, args: params });
+    const res = await tursoClient.execute({ sql, args: safeParams });
     return res.rows.map(row => ({ ...row }));
   }
   return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
+    db.all(sql, safeParams, (err, rows) => {
       if (err) reject(err);
       else resolve(rows);
     });

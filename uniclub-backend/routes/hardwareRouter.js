@@ -50,7 +50,7 @@ router.post('/loans', authenticate, async (req, res) => {
     });
   } catch (err) {
     console.error('Create hardware loan error:', err);
-    res.status(500).json({ success: false, error: 'Failed to submit hardware loan requisition' });
+    res.status(500).json({ success: false, error: err.message || 'Failed to submit hardware loan requisition' });
   }
 });
 

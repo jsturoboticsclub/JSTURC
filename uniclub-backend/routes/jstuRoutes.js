@@ -2213,8 +2213,13 @@ router.patch(['/admin/hardware/loans/:id', '/api/admin/hardware/loans/:id'], aut
       return res.status(404).json({ success: false, error: 'Loan application not found' });
     }
 
-    let updateSql = `UPDATE hardware_loans SET status = ?, admin_notes = COALESCE(?, admin_notes)`;
-    const params = [status, admin_notes];
+    let updateSql = `UPDATE hardware_loans SET status = ?`;
+    const params = [status];
+
+    if (admin_notes !== undefined && admin_notes !== null) {
+      updateSql += `, admin_notes = ?`;
+      params.push(admin_notes);
+    }
 
     if (status === 'approved' || status === 'active') {
       const days = loan.requested_days || 7;
@@ -2250,7 +2255,7 @@ router.patch(['/admin/hardware/loans/:id', '/api/admin/hardware/loans/:id'], aut
     res.json({ success: true, message: `Loan status successfully updated to ${status}` });
   } catch (err) {
     console.error('Update hardware loan error:', err);
-    res.status(500).json({ success: false, error: 'Failed to update loan requisition' });
+    res.status(500).json({ success: false, error: err.message || 'Failed to update loan requisition' });
   }
 });
 

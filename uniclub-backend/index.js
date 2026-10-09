@@ -1,3 +1,5 @@
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -9,7 +11,6 @@ const User = require('./models/User');
 const EnrolledUser = require('./models/EnrolledUser');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const path = require('path');
 const fs = require('fs');
 const authenticateToken = require('./middleware/auth');
 
